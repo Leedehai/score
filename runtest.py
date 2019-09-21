@@ -68,62 +68,78 @@ def split_ctimer_out(s):
     ctimer_stdout = s[ctimer_begin_index + len(DELIMITER_STR) : report_end_index]
     return inspectee_stdout.rstrip(), ctimer_stdout.rstrip()
 
-def generate_logfile_path_stem(metadata):
-    prog, parts = metadata["path"], []
+def get_logfile_path_stem(log_dirname, metadata): # "stem" means no extension name such as ".diff"
+    prog = metadata["path"]
     prog_basename = os.path.basename(prog)
     prog_dir_basename = os.path.basename(os.path.dirname(prog)) # "" if prog doesn't contain '/'
-    path_repr = ("%s_%s" % (prog_dir_basename, prog_basename)) if len(prog_dir_basename) else prog_basename
-    parts.append(path_repr)
+    path_repr = os.path.join(log_dirname, prog_dir_basename, prog_basename)
     if len(metadata["args"]):
+        # 5 digit hash should be enough
         args_hash = hashlib.sha1(' '.join(metadata["args"])).hexdigest()[:5]
-        parts.append(args_hash)
-    return '_'.join(parts)
+        return "%s-%s" % (path_repr, args_hash)
+    else:
+        return path_repr
+
+def create_dir_if_needed(dirname):
+    # NOTE use EAFP (Easier to Ask for Forgiveness than Permission) principle here, i.e.
+    # use try-catch to handle the situation where the directory was already created by
+    # another process.
+    # EAFP can avoid the race condition caused by LBYL (Look Before You Leap): use a
+    # if-statement to check the absence of the target directory before creating it.
+    # Using lock can also avoid the race condition, but it is cumbersome in Python.
+    # Unlike other languages, try-catch doesn't add a noticeable overhead in Python.
+    try:
+        os.makedirs(dirname) # create intermediate dirs if necessary
+    except OSError: # Python2 throws OSError, Python3 throws its subclass FileExistsError
+        pass        # dir already exists (due to multiprocessing)
 
 def write_stdout_file(stdout_filename, stdout_string):
-    # NOTE do not create intermediate directory here avoid race condition
+    assert(stdout_string != None and stdout_string != "")
+    create_dir_if_needed(os.path.dirname(stdout_filename))
     with open(stdout_filename, 'w') as f:
         f.write(stdout_string)
 
 def write_diff_file(diff_filename, diff_string):
-    # NOTE do not create intermediate directory here avoid race condition
-    if diff_string == None or diff_string == "":
-        raise RuntimeError("diff_string is %s" % ("''" if diff_string == "" else "None"))
+    assert(diff_string != None and diff_string != "")
+    create_dir_if_needed(os.path.dirname(diff_filename))
     with open(diff_filename, 'w') as f:
         f.write(diff_string)
-    return diff_filename
 
 def get_diff_str(actual_str, expected_file):
+    with open(expect_file, 'r') as f:
+        expected_str = f.read()
     # TODO, because GoogleTest executables don't need output comparison
     return None # same
 
 def generate_result_dict(metadata, ctimer_reports, stdout_filename, diff_filename):
     match_exit = (metadata["exit"]["type"] == ctimer_reports["exit"]["type"]
                    and metadata["exit"]["repr"] == ctimer_reports["exit"]["repr"])
-    no_diff = diff_filename == None
+    no_comparison_or_no_diff = diff_filename == None
+    all_ok = match_exit and no_comparison_or_no_diff
     return {
         "desc": metadata["desc"], # str
         "path": metadata["path"], # str
         "args": metadata["args"], # list
         "timeout_ms": metadata["timeout_ms"] if metadata["timeout_ms"] != None else DEFAULT_TIMEOUT, # int
-        "ok": match_exit and no_diff, # boolean
+        "ok": all_ok, # boolean
         # details:
         "exit": {
             "ok": match_exit, # boolean
-            # "type" : string, "normal", "timeout", "signal", etc.
-            # "repr" : integer, representing the exit code for "normal"
-            #          exit, timeout limit for "timeout" exit, and signal
-            #          value for "signal" exit
+            # "type"  : string - "normal", "timeout", "signal", "quit", "unknown"
+            # "repr"  : integer, indicating the exit code for "normal" exit, timeout
+            #     value (millisec, processor time) for "timeout" exit, signal
+            #     value "signal" exit, and null for others (timer errors)
             "expected": {
                 "type": metadata["exit"]["type"], # str
                 "repr": metadata["exit"]["repr"]  # int
             },
             "real": {
-                "type": ctimer_reports["exit"]["type"],   # str
-                "repr": ctimer_reports["exit"]["repr"]    # int
+                "type": ctimer_reports["exit"]["type"], # str
+                "repr": ctimer_reports["exit"]["repr"]  # int
             },
         },
         "stdout": {
-            "ok": no_diff, # boolean
+            "ok": no_comparison_or_no_diff, # boolean
             "actual_file": stdout_filename,    # path (str), or None meaning no stdout
             "expect_file": metadata["golden"], # path (str), or None meaning no need to compare
             "diff_file":   diff_filename       # path (str), or None meaning 1) if "expect_file" == None: no need to compare
@@ -147,18 +163,18 @@ def run_one(input_args):
         stdout = subprocess.check_output(
             command, stderr=devnull, env=env_values).decode().rstrip()
     inspectee_stdout, ctimer_stdout = split_ctimer_out(stdout)
-    filepath_stem = os.path.join(log_dirname, generate_logfile_path_stem(metadata))
-    stdout_filename, diff_filename, stdout_comparison_diff = None, None, None
-    if len(inspectee_stdout) != 0:
+    filepath_stem = get_logfile_path_stem(log_dirname, metadata)
+    stdout_filename, diff_filename = None, None
+    if len(inspectee_stdout): # write only if stdout is not empty
         stdout_filename = filepath_stem + ".stdout"
         write_stdout_file(stdout_filename, inspectee_stdout)
-    if metadata["golden"] != None:
+    if metadata["golden"] != None: # compare only if golden exists
         stdout_comparison_diff = get_diff_str(inspectee_stdout, metadata["golden"])
-        if stdout_comparison_diff != None:
+        if stdout_comparison_diff != None: # write only if diff is not empty
             diff_filename = filepath_stem + ".diff"
             write_diff_file(diff_filename, stdout_comparison_diff)
-    ctimer_reports = json.loads(ctimer_stdout)
-    return generate_result_dict(metadata, ctimer_reports, stdout_filename, diff_filename)
+    return generate_result_dict(
+        metadata, json.loads(ctimer_stdout), stdout_filename, diff_filename)
 
 NUM_WORKERS_MAX = 2 * multiprocessing.cpu_count()
 def run_all(timer, is_sequential, log_filename, metadata_list):
@@ -172,9 +188,7 @@ def run_all(timer, is_sequential, log_filename, metadata_list):
     result_list = pool_map(pool, run_one, [
         (timer, log_dirname, metadata) for metadata in metadata_list
     ])
-    if len(result_list) != num_tests:
-        raise RuntimeError("len(result_list) != num_tests: %d vs. %d" % (
-            len(result_list), num_tests))
+    assert(len(result_list) == num_tests)
     error_results = [ result for result in result_list if result["ok"] == False ]
     for result in error_results:
         rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
@@ -184,6 +198,7 @@ def run_all(timer, is_sequential, log_filename, metadata_list):
     color_head = "\x1b[32m" if error_count == 0 else "\x1b[31m"
     sys.stderr.write("%sDone: %.2f sec, passed: %d/%d, log: %s\x1b[0m\n" % (
         color_head, time.time() - start_time, num_tests - error_count, num_tests, log_filename))
+    create_dir_if_needed(log_dirname)
     with open(log_filename, 'w') as f:
         json.dump(result_list, f, indent=2, sort_keys=True)
     return 0 if error_count == 0 else 1
@@ -241,18 +256,18 @@ Exit status object is a JSON object with keys:
 Exactly one of '--paths' and '--meta' is needed.""" % DEFAULT_TIMEOUT
 
 def main():
-    parser = argparse.ArgumentParser(description="Test runner with timer",
+    parser = argparse.ArgumentParser(description="Test runner with timer and logging",
                                      epilog="Unless '--explain' is given, exactly one of '--paths' and '--meta' is needed.")
-    parser.add_argument("-1", "--sequential", action="store_true",
-                        help="run sequentially instead concurrently")
-    parser.add_argument("-g", "--log", metavar="FILE", type=str, default="./test.log",
-                        help="file to write logs, default: ./test.log")
     parser.add_argument("--timer", metavar="TIMER", type=str, default=None,
                         help="path to the timer program (required)")
     parser.add_argument("--paths", metavar="T", nargs='+', default=[],
                         help="paths to test executables")
     parser.add_argument("--meta", metavar="PATH", default=None,
                         help="JSON file of tests' metadata")
+    parser.add_argument("-1", "--sequential", action="store_true",
+                        help="run sequentially instead concurrently")
+    parser.add_argument("-g", "--log", metavar="LOG", type=str, default="logs/test.log",
+                        help="file to write logs, default: logs/test.log")
     parser.add_argument("-e", "--explain", action="store_true",
                         help="explain '--timer', '--paths' and '--meta'")
     args = parser.parse_args()
@@ -264,7 +279,7 @@ def main():
     if args.timer == None:
         sys.exit("[Error] '--timer' is not given; use '-h' for help")
     elif not os.path.isfile(args.timer):
-        sys.exit("[Error] the timer program is not found: %s" % args.timer)
+        sys.exit("[Error] timer program not found: %s" % args.timer)
 
     if ((len(args.paths) == 0 and args.meta == None)
      or (len(args.paths) > 0 and args.meta != None)):
