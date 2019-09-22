@@ -17,7 +17,7 @@ import hashlib
 import re
 from diffhtmlstr import get_diff_html_str # mine
 
-# avoid *.pyc
+# avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
 
 DELIMITER_STR = "#####"
@@ -77,12 +77,10 @@ def get_logfile_path_stem(log_dirname, metadata): # "stem" means no extension na
     prog_basename = os.path.basename(prog)
     prog_dir_basename = os.path.basename(os.path.dirname(prog)) # "" if prog doesn't contain '/'
     path_repr = os.path.join(log_dirname, prog_dir_basename, prog_basename)
+    args_hash = "00000"
     if len(metadata["args"]):
-        # 5 digit hash should be enough
-        args_hash = hashlib.sha1(' '.join(metadata["args"])).hexdigest()[:5]
-        return "%s-%s" % (path_repr, args_hash)
-    else:
-        return path_repr
+        args_hash = hashlib.sha1(' '.join(metadata["args"]).encode()).hexdigest()[:5]
+    return "%s-%s" % (path_repr, args_hash)
 
 def create_dir_if_needed(dirname):
     # NOTE use EAFP (Easier to Ask for Forgiveness than Permission) principle here, i.e.
@@ -106,21 +104,15 @@ def process_inspectee_stdout(s):
         new_lines += [ (part + "\n") for part in re.findall(r'.{0,90}', line) ]
     return ''.join(new_lines)
 
-def write_stdout_file(stdout_filename, stdout_string):
-    assert(stdout_string != None)
-    create_dir_if_needed(os.path.dirname(stdout_filename))
-    with open(stdout_filename, 'w') as f:
-        f.write(stdout_string)
+def write_file(filename, s, can_be_empty_str):
+    assert(s != None)
+    if not can_be_empty_str:
+        assert(s != "")
+    create_dir_if_needed(os.path.dirname(filename))
+    with open(filename, 'w') as f:
+        f.write(s)
 
-def write_diff_file(diff_filename, diff_string):
-    assert(diff_string != None and diff_string != "")
-    create_dir_if_needed(os.path.dirname(diff_filename))
-    with open(diff_filename, 'w') as f:
-        f.write(diff_string)
-
-def generate_result_dict(metadata, ctimer_reports, stdout_filename, diff_filename, exceptions):
-    match_exit = (metadata["exit"]["type"] == ctimer_reports["exit"]["type"]
-                   and metadata["exit"]["repr"] == ctimer_reports["exit"]["repr"])
+def generate_result_dict(metadata, ctimer_reports, match_exit, stdout_filename, diff_filename, exceptions):
     no_comparison_or_no_diff = diff_filename == None
     all_ok = match_exit and no_comparison_or_no_diff
     return {
@@ -168,20 +160,29 @@ def run_one(input_args):
     }
     with open(os.devnull, 'w') as devnull:
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
-        stdout = subprocess.check_output(
-            [ timer ] + command_parts, stderr=devnull, env=env_values).decode().rstrip()
+        try:
+            stdout = subprocess.check_output(
+                [ timer ] + command_parts, stderr=devnull, env=env_values).decode().rstrip()
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError("CalledProcessError (exit %d): %s" % (e.returncode, e.cmd))
     inspectee_stdout_raw, ctimer_stdout = split_ctimer_out(stdout)
     inspectee_stdout = process_inspectee_stdout(inspectee_stdout_raw)
     assert(len(ctimer_stdout))
+    ctimer_dict = json.loads(ctimer_stdout)
+    match_exit = (metadata["exit"]["type"] == ctimer_dict["exit"]["type"]
+                  and metadata["exit"]["repr"] == ctimer_dict["exit"]["repr"]) # metadata["exit"] may have more keys
     exceptions = [] # list of str, describe misc errors in run_one() itself (not in test)
     filepath_stem = get_logfile_path_stem(log_dirname, metadata)
-    stdout_filename, diff_filename = None if write_golden else filepath_stem + ".stdout", None
+    stdout_filename, diff_filename = "(golden)" if write_golden else filepath_stem + ".stdout", None
     if not write_golden:
-        write_stdout_file(stdout_filename, inspectee_stdout)
+        write_file(stdout_filename, inspectee_stdout, can_be_empty_str=True)
     if metadata["golden"] != None: # write or compare only if "golden" is not None
         golden_filename = metadata["golden"]
         if write_golden: # write stdout to golden
-            write_stdout_file(golden_filename, inspectee_stdout)
+            if match_exit:
+                write_file(golden_filename, inspectee_stdout, can_be_empty_str=True)
+            else:
+                exceptions.append("golden file not written: test's exit was not as expected")
         else: # compare stdout with golden
             found_golden, stdout_comparison_diff = get_diff_html_str(
                 filepath_stem.split(os.sep)[-1], # title of HTML
@@ -192,9 +193,9 @@ def run_one(input_args):
                 exceptions.append("golden file missing")
             if stdout_comparison_diff != None: # write only if diff is not empty
                 diff_filename = os.path.abspath(filepath_stem + ".diff.html")
-                write_diff_file(diff_filename, stdout_comparison_diff)
+                write_file(diff_filename, stdout_comparison_diff, can_be_empty_str=False)
     return generate_result_dict(
-        metadata, json.loads(ctimer_stdout), stdout_filename, diff_filename, exceptions)
+        metadata, ctimer_dict, match_exit, stdout_filename, diff_filename, exceptions)
 
 NUM_WORKERS_MAX = 2 * multiprocessing.cpu_count()
 def run_all(args, metadata_list):
@@ -320,7 +321,16 @@ def main():
         if not os.path.isfile(args.meta):
             sys.exit("[Error] '--meta' file not found: %s" % args.meta)
         with open(args.meta, 'r') as f:
-            metadata_list = json.load(f)
+            try:
+                metadata_list = json.load(f)
+            except ValueError:
+                sys.exit("[Error] not a valid JSON file: %s" % args.meta)
+
+    if args.write_golden:
+        prompt = "About to make a expectation file with the given arguments.\nAre you sure? [y/N] >> "
+        consent = raw_input(prompt) if sys.version_info[0] == 2 else input(prompt)
+        if consent.lower() != "y":
+            sys.exit("Aborted.")
 
     return run_all(args, metadata_list)
 

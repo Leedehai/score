@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta http-equiv="Content-Type"
-          content="text/html; charset=ISO-8859-1" />
+          content="text/html; charset=UTF-8" />
     <title> %s (diff) </title>
     <!-- CSS is based upon the one used by Python's difflib.HtmlDiff.make_file() -->
     <style type="text/css">
@@ -28,24 +28,55 @@
             background-color: #b7ebfc50;
         }
         /* colored like GitHub */
-        .from_line {background-color:rgba(255, 233, 236, 0.7)}
+        .from_line {background-color:rgba(255, 225, 232, 0.7)}
         [id^="from"] + td > span.diff_chg {background-color:rgba(242, 160, 171, 0.7)}
         [id^="from"] + td > span.diff_sub {background-color:rgba(242, 160, 171, 0.7)}
-        .to_line {background-color:rgba(225, 255, 232, 0.7)}
-        [id^="to"] + td > span.diff_add {background-color: rgba(159, 242, 176, 0.7)}
-        [id^="to"] + td > span.diff_chg {background-color:rgba(159, 242, 176, 0.7)}
+        .to_line {background-color:rgba(208, 253, 219, 0.7)}
+        [id^="to"] + td > span.diff_add {background-color: rgba(160, 247, 171, 0.8)}
+        [id^="to"] + td > span.diff_chg {background-color:rgba(160, 247, 171, 0.8)}
         .diff_header { background-color:#e0e0e0 }
         td.diff_header { text-align:right }
         .diff_next {background-color:#eeeeee}
     </style>
     <script>
-        function colorEntireDiffLines() {
-            spans_add = Array.from(document.getElementsByClassName("diff_add"));
-            spans_chg = Array.from(document.getElementsByClassName("diff_chg"));
-            spans_sub = Array.from(document.getElementsByClassName("diff_sub"));
-            for (var span_node of spans_add.concat(spans_chg).concat(spans_sub)) {
-                var parent = span_node.parentElement;        // td
-                var parentPrevious = parent.previousSibling; // td
+        function actOnLoad() {
+            populateFilename();
+            insertTableHead();
+            ensureNumAndTextColumnIsWide(3, 93);
+            colorEntireLinesWhereDiffSpansExist();
+        }
+        function populateFilename() {
+            const filename = location.href.split("/").slice(-1);
+            document.getElementById("currentFilename").innerHTML = filename;
+        }
+        function insertTableHead() {
+            const table = document.getElementsByTagName("table")[0];
+            const header = table.createTHead();
+            const header_row = header.insertRow(0);
+            const cell_left = header_row.insertCell(-1);
+            cell_left.colSpan="3";
+            cell_left.style = "text-align:center";
+            cell_left.innerHTML = "<b>expected</b>";
+            const cell_right = header_row.insertCell(-1);
+            cell_right.colSpan="3";
+            cell_right.style = "text-align:center";
+            cell_right.innerHTML = "<b>actual</b>";
+        }
+        function ensureNumAndTextColumnIsWide(num_width, text_width) {
+            let line_number_tds = document.getElementsByClassName("diff_header");
+            for (let line_num_node of line_number_tds) {
+                line_num_node.style="width:" + num_width + "ch";
+                const text_td_node = line_num_node.nextSibling;
+                text_td_node.style="width:" + text_width + "ch";
+            }
+        }
+        function colorEntireLinesWhereDiffSpansExist() {
+            const spans_add = Array.from(document.getElementsByClassName("diff_add"));
+            const spans_chg = Array.from(document.getElementsByClassName("diff_chg"));
+            const spans_sub = Array.from(document.getElementsByClassName("diff_sub"));
+            for (let span_node of spans_add.concat(spans_chg).concat(spans_sub)) {
+                const parent = span_node.parentElement;        // td
+                const parentPrevious = parent.previousSibling; // td
                 if (parentPrevious.id.startsWith("from")) {
                     parent.classList.add("from_line");
                 }
@@ -57,8 +88,12 @@
     </script>
 </head>
 
-<body onload="colorEntireDiffLines()">
+<body onload="actOnLoad()">
     <h1 class="head">Diff</h1>
+    <p>
+        <span class="info-key">this file</span><br>
+        <span class="info-value">&nbsp;&nbsp;<span id="currentFilename"></span></span>
+    </p>
     <p>
         <span class="info-key">description</span><br>
         <span class="info-value">&nbsp;&nbsp;%s</span>
@@ -68,11 +103,11 @@
         <span class="info-value">&nbsp;&nbsp;%s</span>
     </p>
     <p>
-        <span class="info-key">golden stdout (left)</span><br>
+        <span class="info-key">expected stdout (%s)</span><br>
         <span class="info-value">&nbsp;&nbsp;<a href='%s'>%s</a></span>
     </p>
     <p>
-        <span class="info-key">actual stdout (right)</span><br>
+        <span class="info-key">actual stdout (%s)</span><br>
         <span class="info-value">&nbsp;&nbsp;<a href='%s'>%s</a></span>
     </p>
 

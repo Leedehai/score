@@ -1,0 +1,24 @@
+[
+    {
+        "desc": "lorem",
+        "path": "normal.exe",
+        "args": [],
+        "golden": null,
+        "timeout_ms" : null,
+        "exit": {
+            "type": "normal",
+            "repr": 0
+        }
+    },
+    {
+        "desc": "lorem",
+        "path": "normal.exe",
+        "args": [ "--print" ],
+        "golden": "mocks/lorem.gold",
+        "timeout_ms" : null,
+        "exit": {
+            "type": "normal",
+            "repr": 0
+        }
+    }
+]
