@@ -10,11 +10,15 @@ import os, sys
 import json
 import time
 import argparse
-import difflib
 import multiprocessing
 import subprocess
 import signal
 import hashlib
+import re
+from diffhtmlstr import get_diff_html_str # mine
+
+# avoid *.pyc
+sys.dont_write_bytecode = True
 
 DELIMITER_STR = "#####"
 DEFAULT_TIMEOUT = 1500
@@ -93,8 +97,17 @@ def create_dir_if_needed(dirname):
     except OSError: # Python2 throws OSError, Python3 throws its subclass FileExistsError
         pass        # dir already exists (due to multiprocessing)
 
+def process_inspectee_stdout(s):
+    # remove color sequences
+    s = re.sub("\x1b\[.*?m", "", s)
+    # wrap to column width = 90
+    old_lines, new_lines = s.splitlines(False), []
+    for line in old_lines:
+        new_lines += [ (part + "\n") for part in re.findall(r'.{0,90}', line) ]
+    return ''.join(new_lines)
+
 def write_stdout_file(stdout_filename, stdout_string):
-    assert(stdout_string != None and stdout_string != "")
+    assert(stdout_string != None)
     create_dir_if_needed(os.path.dirname(stdout_filename))
     with open(stdout_filename, 'w') as f:
         f.write(stdout_string)
@@ -105,13 +118,7 @@ def write_diff_file(diff_filename, diff_string):
     with open(diff_filename, 'w') as f:
         f.write(diff_string)
 
-def get_diff_str(actual_str, expected_file):
-    with open(expect_file, 'r') as f:
-        expected_str = f.read()
-    # TODO, because GoogleTest executables don't need output comparison
-    return None # same
-
-def generate_result_dict(metadata, ctimer_reports, stdout_filename, diff_filename):
+def generate_result_dict(metadata, ctimer_reports, stdout_filename, diff_filename, exceptions):
     match_exit = (metadata["exit"]["type"] == ctimer_reports["exit"]["type"]
                    and metadata["exit"]["repr"] == ctimer_reports["exit"]["repr"])
     no_comparison_or_no_diff = diff_filename == None
@@ -139,7 +146,7 @@ def generate_result_dict(metadata, ctimer_reports, stdout_filename, diff_filenam
             },
         },
         "stdout": {
-            "ok": no_comparison_or_no_diff, # boolean
+            "ok": no_comparison_or_no_diff,    # boolean
             "actual_file": stdout_filename,    # path (str), or None meaning no stdout
             "expect_file": metadata["golden"], # path (str), or None meaning no need to compare
             "diff_file":   diff_filename       # path (str), or None meaning 1) if "expect_file" == None: no need to compare
@@ -147,13 +154,14 @@ def generate_result_dict(metadata, ctimer_reports, stdout_filename, diff_filenam
         },
         "times_ms" : {
             "total": ctimer_reports["times_ms"]["total"],
-        }
+        },
+        "exceptions": exceptions # list of str, describe errors encountered in run_one() (not in test)
     }
 
 def run_one(input_args):
     signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore SIGINT, required by pool_map()
-    timer, log_dirname, metadata = input_args
-    command = [ timer, metadata["path"] ] + metadata["args"]
+    timer, log_dirname, write_golden, metadata = input_args
+    command_parts = [ metadata["path"] ] + metadata["args"]
     env_values = {
         "CTIMER_DELIMITER": DELIMITER_STR,
         "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else DEFAULT_TIMEOUT)
@@ -161,32 +169,46 @@ def run_one(input_args):
     with open(os.devnull, 'w') as devnull:
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
         stdout = subprocess.check_output(
-            command, stderr=devnull, env=env_values).decode().rstrip()
-    inspectee_stdout, ctimer_stdout = split_ctimer_out(stdout)
+            [ timer ] + command_parts, stderr=devnull, env=env_values).decode().rstrip()
+    inspectee_stdout_raw, ctimer_stdout = split_ctimer_out(stdout)
+    inspectee_stdout = process_inspectee_stdout(inspectee_stdout_raw)
+    assert(len(ctimer_stdout))
+    exceptions = [] # list of str, describe misc errors in run_one() itself (not in test)
     filepath_stem = get_logfile_path_stem(log_dirname, metadata)
-    stdout_filename, diff_filename = None, None
-    if len(inspectee_stdout): # write only if stdout is not empty
-        stdout_filename = filepath_stem + ".stdout"
+    stdout_filename, diff_filename = None if write_golden else filepath_stem + ".stdout", None
+    if not write_golden:
         write_stdout_file(stdout_filename, inspectee_stdout)
-    if metadata["golden"] != None: # compare only if golden exists
-        stdout_comparison_diff = get_diff_str(inspectee_stdout, metadata["golden"])
-        if stdout_comparison_diff != None: # write only if diff is not empty
-            diff_filename = filepath_stem + ".diff"
-            write_diff_file(diff_filename, stdout_comparison_diff)
+    if metadata["golden"] != None: # write or compare only if "golden" is not None
+        golden_filename = metadata["golden"]
+        if write_golden: # write stdout to golden
+            write_stdout_file(golden_filename, inspectee_stdout)
+        else: # compare stdout with golden
+            found_golden, stdout_comparison_diff = get_diff_html_str(
+                filepath_stem.split(os.sep)[-1], # title of HTML
+                metadata["desc"], ' '.join(command_parts),
+                golden_filename, stdout_filename
+            )
+            if not found_golden:
+                exceptions.append("golden file missing")
+            if stdout_comparison_diff != None: # write only if diff is not empty
+                diff_filename = os.path.abspath(filepath_stem + ".diff.html")
+                write_diff_file(diff_filename, stdout_comparison_diff)
     return generate_result_dict(
-        metadata, json.loads(ctimer_stdout), stdout_filename, diff_filename)
+        metadata, json.loads(ctimer_stdout), stdout_filename, diff_filename, exceptions)
 
 NUM_WORKERS_MAX = 2 * multiprocessing.cpu_count()
-def run_all(timer, is_sequential, log_filename, metadata_list):
+def run_all(args, metadata_list):
+    timer, is_sequential, log_dirname, write_golden = \
+        args.timer, args.sequential, args.log, args.write_golden
     num_tests = len(metadata_list)
-    log_dirname = os.path.dirname(log_filename)
+    log_filename = os.path.join(log_dirname, "run.log")
     num_workers = 1 if is_sequential else min(num_tests, NUM_WORKERS_MAX)
     sys.stderr.write("Start running %d tests, worker count: %d ...\n" % (
         num_tests, num_workers))
     pool = multiprocessing.Pool(num_workers)
     start_time = time.time()
     result_list = pool_map(pool, run_one, [
-        (timer, log_dirname, metadata) for metadata in metadata_list
+        (timer, log_dirname, write_golden, metadata) for metadata in metadata_list
     ])
     assert(len(result_list) == num_tests)
     error_results = [ result for result in result_list if result["ok"] == False ]
@@ -239,6 +261,7 @@ EXPLAINATION_STRING = """Explanations:
             the commandline arguments
         "golden"  : string or null
             path to the stdout's expected output file; null: not needed
+            (if '--write-golden' is given, this is where stdout be written)
         "timeout_ms" : integer or null
             the max processor time (ms); null: using default (%d)
         "exit"    : exit status object (see below), the expected exit status
@@ -256,7 +279,7 @@ Exit status object is a JSON object with keys:
 Exactly one of '--paths' and '--meta' is needed.""" % DEFAULT_TIMEOUT
 
 def main():
-    parser = argparse.ArgumentParser(description="Test runner with timer and logging",
+    parser = argparse.ArgumentParser(description="Test runner, with timer and logging and HTML diff view",
                                      epilog="Unless '--explain' is given, exactly one of '--paths' and '--meta' is needed.")
     parser.add_argument("--timer", metavar="TIMER", type=str, default=None,
                         help="path to the timer program (required)")
@@ -266,10 +289,12 @@ def main():
                         help="JSON file of tests' metadata")
     parser.add_argument("-1", "--sequential", action="store_true",
                         help="run sequentially instead concurrently")
-    parser.add_argument("-g", "--log", metavar="LOG", type=str, default="logs/test.log",
-                        help="file to write logs, default: logs/test.log")
+    parser.add_argument("-g", "--log", metavar="LOGDIR", type=str, default="./logs",
+                        help="directory to write logs, default: ./logs")
+    parser.add_argument("-w", "--write-golden", action="store_true",
+                        help="write stdout to golden files")
     parser.add_argument("-e", "--explain", action="store_true",
-                        help="explain '--timer', '--paths' and '--meta'")
+                        help="explain more concepts")
     args = parser.parse_args()
 
     if args.explain:
@@ -297,7 +322,7 @@ def main():
         with open(args.meta, 'r') as f:
             metadata_list = json.load(f)
 
-    return run_all(args.timer, args.sequential, args.log, metadata_list)
+    return run_all(args, metadata_list)
 
 if __name__ == "__main__":
     sys.exit(main())
