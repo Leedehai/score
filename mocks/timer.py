@@ -5,7 +5,7 @@
 # File: mock-timer.py
 # ---------------------------
 # Mocks the timer program's basic functionality.
-# NOTE the real timer should be written a compiled language for speed.
+# NOTE the real timer should be written in a compiled language for speed.
 
 import os, sys
 

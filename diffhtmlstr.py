@@ -9,12 +9,13 @@
 import os
 import difflib
 
-MISSING_EXPECTED_FILE_FORMAT = "<div style='text-align:center'><b style='font-size:32px;color:red'>\
+MISSING_EXPECTED_FILE_FORMAT = "<div style='border:solid red 3px; width:80ch; padding:1ch'>\
+<b style='font-size:32px;color:red;text-align:center'>\
 !!!!!! Error: DO NOT COMMIT !!!!!!</b><br>\
-<span style='font-family:Courier'>Golden file missing: %s</span><br><br></div>"
+<span style='font-family:Courier;text-align:center;overflow-wrap:break-word'><b>Expected output file missing:</b><br>{filename}</span><br></div><br>"
 
 # Use "str % (..)" to substitute placeholders, instead of "str.format(..)", because
-# escaping '{' and '}' in the HTML format distorts the CSS definitions.
+# escaping '{' and '}' in the HTML format distorts the CSS definition statements.
 with open(os.path.join(os.path.dirname(__file__), "diff.html")) as f:
     DIFF_HTML_FORMAT = f.read()
 
@@ -41,7 +42,7 @@ def get_diff_html_str(html_title, desc, command, expected_filename, actual_filen
     if not found_expected:
         # do not raise RuntimeError, because this is user's input error
         return False, DIFF_HTML_FORMAT % tuple(feed_collection + [
-             MISSING_EXPECTED_FILE_FORMAT % expected_filename
+             MISSING_EXPECTED_FILE_FORMAT.format(filename=expected_filename)
              + diff_str_as_html_table
         ]) # missing golden file, diff str
     if actual_lines == expected_lines:

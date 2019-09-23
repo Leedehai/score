@@ -1,0 +1,46 @@
+[
+    {
+        "desc": "lorem",
+        "path": "normal.exe",
+        "args": [],
+        "golden": null,
+        "timeout_ms" : null,
+        "exit": {
+            "type": "normal",
+            "repr": 0
+        }
+    },
+    {
+        "desc": "lorem",
+        "path": "normal.exe",
+        "args": [ "--print" ],
+        "golden": "mocks/lorem.gold",
+        "timeout_ms" : null,
+        "exit": {
+            "type": "normal",
+            "repr": 0
+        }
+    },
+    {
+        "desc": "lorem",
+        "path": "normal.exe",
+        "args": [ "--print" ],
+        "golden": "delete_me.gold",
+        "timeout_ms" : null,
+        "exit": {
+            "type": "normal",
+            "repr": 0
+        }
+    },
+    {
+        "desc": "lorem",
+        "path": "timeout.exe",
+        "args": [ "--print" ],
+        "golden": "should_not_be_created.gold",
+        "timeout_ms" : null,
+        "exit": {
+            "type": "normal",
+            "repr": 0
+        }
+    }
+]

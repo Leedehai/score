@@ -24,7 +24,10 @@
             font-family: monospace;
             font-size: 12px;
         }
-        tr:hover {
+        a {
+            color: #0000ee;
+        }
+        tbody tr:hover {
             background-color: #b7ebfc50;
         }
         /* colored like GitHub */
@@ -56,12 +59,20 @@
             const header_row = header.insertRow(0);
             const cell_left = header_row.insertCell(-1);
             cell_left.colSpan="3";
-            cell_left.style = "text-align:center";
-            cell_left.innerHTML = "<b>expected</b>";
+            cell_left.style = "text-align:center;font-weight:bold";
+            const anchor_left = document.createElement('a');
+            anchor_left.innerHTML = "expected";
+            anchor_left.href = document.getElementById("expected_file_url").href;
+            anchor_left.title = document.getElementById("expected_file_url").innerText;
+            cell_left.appendChild(anchor_left);
             const cell_right = header_row.insertCell(-1);
             cell_right.colSpan="3";
-            cell_right.style = "text-align:center";
-            cell_right.innerHTML = "<b>actual</b>";
+            cell_right.style = "text-align:center;font-weight:bold";
+            const anchor_right = document.createElement('a');
+            anchor_right.innerHTML = "actual";
+            anchor_right.href = document.getElementById("actual_file_url").href;
+            anchor_right.title = document.getElementById("actual_file_url").innerText;
+            cell_right.appendChild(anchor_right);
         }
         function ensureNumAndTextColumnIsWide(num_width, text_width) {
             let line_number_tds = document.getElementsByClassName("diff_header");
@@ -104,12 +115,12 @@
         <span class="info-value">&nbsp;&nbsp;%s</span>
     </p>
     <p>
-        <span class="info-key">expected stdout (%s)</span><br>
-        <span class="info-value">&nbsp;&nbsp;<a href='%s'>%s</a></span>
+        <span class="info-key">expected stdout (%s)</span><br> <!-- size string or "not found" -->
+        <span class="info-value">&nbsp;&nbsp;<a href='%s' id="expected_file_url">%s</a></span>
     </p>
     <p>
-        <span class="info-key">actual stdout (%s)</span><br>
-        <span class="info-value">&nbsp;&nbsp;<a href='%s'>%s</a></span>
+        <span class="info-key">actual stdout (%s)</span><br> <!-- size string -->
+        <span class="info-value">&nbsp;&nbsp;<a href='%s' id="actual_file_url">%s</a></span>
     </p>
 
     <!-- table placeholder: Python's difflib.HtmlDiff.make_table() -->

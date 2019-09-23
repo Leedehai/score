@@ -3,3 +3,6 @@
 *py[co]
 .DS_Store
 .vscode
+delete_me.gold
+do_not_create.gold
+should_not_be_created.gold
