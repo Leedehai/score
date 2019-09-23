@@ -21,20 +21,19 @@ Run tests in parallel with designated timer.
 ```sh
 $ ./runtest.py --help
 usage: runtest.py [-h] [--timer TIMER] [--paths T [T ...]] [--meta PATH] [-1]
-                  [-g LOGDIR] [-w] [-e]
+                  [-g DIR] [-w] [-e]
 
 Test runner, with timer and logging and HTML diff view
 
 optional arguments:
-  -h, --help            show this help message and exit
-  --timer TIMER         path to the timer program (required)
-  --paths T [T ...]     paths to test executables
-  --meta PATH           JSON file of tests' metadata
-  -1, --sequential      run sequentially instead concurrently
-  -g LOGDIR, --log LOGDIR
-                        directory to write logs, default: ./logs
-  -w, --write-golden    write stdout to golden files
-  -e, --explain         explain more concepts
+  -h, --help          show this help message and exit
+  --timer TIMER       path to the timer program (required)
+  --paths T [T ...]   paths to test executables
+  --meta PATH         JSON file of tests' metadata
+  -1, --sequential    run sequentially instead concurrently
+  -g DIR, --log DIR   directory to write logs, default: ./logs
+  -w, --write-golden  write stdout to golden files instead of checking
+  -e, --explain       explain more concepts
 
 Unless '--explain' is given, exactly one of '--paths' and '--meta' is needed.
 ```
@@ -43,6 +42,9 @@ The timer program is compiled from [ctimer](https://github.com/Leedehai/ctimer),
 
 Check:
 ```sh
+# on macOS, use 'open' to open files from terminal;
+# on Linux distributions, however, the most widely installed is 'xdg-open'
+
 # run tests that are all good
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1
 # view the log as text file
@@ -52,7 +54,7 @@ open -t logs1/run.log
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2
 # view the log as text file
 open -t logs2/run.log
-# view the diff files in browser (these diff files' paths are recorded in the log)
+# view the diff files in browser (their paths are found in the log)
 open logs2/normal.exe-00000.diff.html
 open logs2/normal.exe-fcea8.diff.html
 open logs2/normal.exe-6a39d.diff.html
@@ -60,8 +62,7 @@ open logs2/normal.exe-6a39d.diff.html
 
 ### [view.py](view.py)
 
-View the tests from browser. It is a single page web application, without third-party libraries.
-> It needs [view.html](view.html), [view.css](view.css), and [view.js](view.js).
+Result viewer, which generates a static website to view the tests' results in browser. No third-party libraries needed.
 
 ### [diffhtmlstr.py](diffhtmlstr.py)
 

@@ -20,6 +20,8 @@ from diffhtmlstr import get_diff_html_str # mine
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
 
+LOG_FILE_BASE = "run.log"
+GOLDEN_FILE_NOT_WRITTEN = "golden file not written"
 DELIMITER_STR = "#####"
 DEFAULT_TIMEOUT = 1500
 
@@ -82,6 +84,20 @@ def get_logfile_path_stem(log_dirname, metadata): # "stem" means no extension na
         args_hash = hashlib.sha1(' '.join(metadata["args"]).encode()).hexdigest()[:5]
     return "%s-%s" % (path_repr, args_hash)
 
+def print_error_result_to_stderr(result, timer, write_this_golden):
+    rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
+    sys.stderr.write("\x1b[33m[error logged]%s %s\x1b[0m\n\tas expected: { \"exit\": %s, \"stdout\": %s }\n\t%s\n" % (
+        " [golden file not written]" if write_this_golden else "",
+        result["desc"], str(result["exit"]["ok"]).lower(), str(result["stdout"]["ok"]).lower(), rerun_command))
+
+def print_golden_overwriting_state_to_stderr(result, timer):
+    attempted_golden_file = result["stdout"]["golden_file"]
+    not_written_exceptions = [ e for e in result["exceptions"] if e.startswith(GOLDEN_FILE_NOT_WRITTEN) ]
+    rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
+    if len(not_written_exceptions) == 0:
+        sys.stderr.write("\x1b[36m[golden file written] %s\x1b[0m\n\tpath: %s (%d B)\n\t%s\n" % (
+            result["desc"], attempted_golden_file, os.path.getsize(attempted_golden_file), rerun_command))
+
 def create_dir_if_needed(dirname):
     # NOTE use EAFP (Easier to Ask for Forgiveness than Permission) principle here, i.e.
     # use try-catch to handle the situation where the directory was already created by
@@ -104,9 +120,9 @@ def process_inspectee_stdout(s):
         new_lines += [ (part + "\n") for part in re.findall(r'.{0,90}', line) ]
     return ''.join(new_lines)
 
-def write_file(filename, s, can_be_empty_str):
+def write_file(filename, s, assert_str_non_empty=False):
     assert(s != None)
-    if not can_be_empty_str:
+    if assert_str_non_empty:
         assert(s != "")
     create_dir_if_needed(os.path.dirname(filename))
     with open(filename, 'w') as f:
@@ -140,15 +156,15 @@ def generate_result_dict(metadata, ctimer_reports, match_exit, stdout_filename, 
         "stdout": {
             "ok": no_comparison_or_no_diff,    # boolean
             "actual_file": stdout_filename,    # path (str), or None meaning no stdout
-            "expect_file": metadata["golden"], # path (str), or None meaning no need to compare
-            "diff_file":   diff_filename       # path (str), or None meaning 1) if "expect_file" == None: no need to compare
-                                               #                          or 2) if "expect_file" != None: no diff found
+            "golden_file": metadata["golden"], # path (str), or None meaning no need to compare
+            "diff_file":   diff_filename       # path (str), or None meaning 1) if "golden_file" == None: no need to compare
+                                               #                          or 2) if "golden_file" != None: no diff found
         },
         "times_ms" : {
             "total": ctimer_reports["times_ms"]["total"],
         },
         "exceptions": exceptions # list of str, describe errors encountered in run_one() (not in test)
-    }
+    } # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
 
 def run_one(input_args):
     signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore SIGINT, required by pool_map()
@@ -175,14 +191,21 @@ def run_one(input_args):
     filepath_stem = get_logfile_path_stem(log_dirname, metadata)
     stdout_filename, diff_filename = "(golden)" if write_golden else filepath_stem + ".stdout", None
     if not write_golden:
-        write_file(stdout_filename, inspectee_stdout, can_be_empty_str=True)
+        write_file(stdout_filename, inspectee_stdout)
     if metadata["golden"] != None: # write or compare only if "golden" is not None
         golden_filename = metadata["golden"]
         if write_golden: # write stdout to golden
             if match_exit:
-                write_file(golden_filename, inspectee_stdout, can_be_empty_str=True)
+                golden_exists_and_same = False
+                if os.path.isfile(golden_filename):
+                    with open(golden_filename, 'r') as f:
+                        if f.read() == inspectee_stdout:
+                            golden_exists_and_same = True
+                            exceptions.append("%s: content is the same" % GOLDEN_FILE_NOT_WRITTEN)
+                if not golden_exists_and_same:
+                    write_file(golden_filename, inspectee_stdout)
             else:
-                exceptions.append("golden file not written: test's exit was not as expected")
+                exceptions.append("%s: test's exit was not as expected" % GOLDEN_FILE_NOT_WRITTEN)
         else: # compare stdout with golden
             found_golden, stdout_comparison_diff = get_diff_html_str(
                 filepath_stem.split(os.sep)[-1], # title of HTML
@@ -193,7 +216,7 @@ def run_one(input_args):
                 exceptions.append("golden file missing")
             if stdout_comparison_diff != None: # write only if diff is not empty
                 diff_filename = os.path.abspath(filepath_stem + ".diff.html")
-                write_file(diff_filename, stdout_comparison_diff, can_be_empty_str=False)
+                write_file(diff_filename, stdout_comparison_diff, assert_str_non_empty=True)
     return generate_result_dict(
         metadata, ctimer_dict, match_exit, stdout_filename, diff_filename, exceptions)
 
@@ -202,7 +225,7 @@ def run_all(args, metadata_list):
     timer, is_sequential, log_dirname, write_golden = \
         args.timer, args.sequential, args.log, args.write_golden
     num_tests = len(metadata_list)
-    log_filename = os.path.join(log_dirname, "run.log")
+    log_filename = os.path.join(log_dirname, LOG_FILE_BASE)
     num_workers = 1 if is_sequential else min(num_tests, NUM_WORKERS_MAX)
     sys.stderr.write("Start running %d tests, worker count: %d ...\n" % (
         num_tests, num_workers))
@@ -212,19 +235,21 @@ def run_all(args, metadata_list):
         (timer, log_dirname, write_golden, metadata) for metadata in metadata_list
     ])
     assert(len(result_list) == num_tests)
-    error_results = [ result for result in result_list if result["ok"] == False ]
-    for result in error_results:
-        rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
-        sys.stderr.write("\x1b[33m[logged error] %s\x1b[0m\n\tas expected: { \"exit\": %s, \"stdout\": %s }\n\t%s\n" % (
-            result["desc"], str(result["exit"]["ok"]).lower(), str(result["stdout"]["ok"]).lower(), rerun_command))
-    error_count = len(error_results)
-    color_head = "\x1b[32m" if error_count == 0 else "\x1b[31m"
+    error_result_count = 0
+    for result in result_list:
+        write_this_golden = write_golden and result["stdout"]["golden_file"] != None
+        if write_this_golden:
+            print_golden_overwriting_state_to_stderr(result, timer)
+        if result["ok"] == False:
+            error_result_count += 1
+            print_error_result_to_stderr(result, timer, write_this_golden)
+    color_head = "\x1b[32m" if error_result_count == 0 else "\x1b[31m"
     sys.stderr.write("%sDone: %.2f sec, passed: %d/%d, log: %s\x1b[0m\n" % (
-        color_head, time.time() - start_time, num_tests - error_count, num_tests, log_filename))
+        color_head, time.time() - start_time, num_tests - error_result_count, num_tests, log_filename))
     create_dir_if_needed(log_dirname)
     with open(log_filename, 'w') as f:
         json.dump(result_list, f, indent=2, sort_keys=True)
-    return 0 if error_count == 0 else 1
+    return 0 if error_result_count == 0 else 1
 
 EXPLAINATION_STRING = """Explanations:
 
@@ -241,8 +266,8 @@ EXPLAINATION_STRING = """Explanations:
         environment variable CTIMER_DELIMITER:
             delimiter string at the beginning and end of the stats report
             string; if not given, use empty string
-        note: the script will set the environment variables as needed locally
-            when invoking the timer program
+        * the script will set the environment variables as needed locally
+          when invoking the timer program
     outputs: the inspected program's outputs (stdout, stderr), with stats
         report in stdout if CTIMER_STATS is unspecified; if CTIMER_STATS
         is specified, the stats report will be written to that file
@@ -262,7 +287,9 @@ EXPLAINATION_STRING = """Explanations:
             the commandline arguments
         "golden"  : string or null
             path to the stdout's expected output file; null: not needed
-            (if '--write-golden' is given, this is where stdout be written)
+            * if '--write-golden' is given, stdout is written to this file
+            * tests with the same expected stdout should not share the same
+              file, to avoid race condition when '--write-golden' is given
         "timeout_ms" : integer or null
             the max processor time (ms); null: using default (%d)
         "exit"    : exit status object (see below), the expected exit status
@@ -290,10 +317,10 @@ def main():
                         help="JSON file of tests' metadata")
     parser.add_argument("-1", "--sequential", action="store_true",
                         help="run sequentially instead concurrently")
-    parser.add_argument("-g", "--log", metavar="LOGDIR", type=str, default="./logs",
+    parser.add_argument("-g", "--log", metavar="DIR", type=str, default="./logs",
                         help="directory to write logs, default: ./logs")
     parser.add_argument("-w", "--write-golden", action="store_true",
-                        help="write stdout to golden files")
+                        help="write stdout to golden files instead of checking")
     parser.add_argument("-e", "--explain", action="store_true",
                         help="explain more concepts")
     args = parser.parse_args()
@@ -327,7 +354,7 @@ def main():
                 sys.exit("[Error] not a valid JSON file: %s" % args.meta)
 
     if args.write_golden:
-        prompt = "About to make a expectation file with the given arguments.\nAre you sure? [y/N] >> "
+        prompt = "About to overwrite golden files of tests with their stdout.\nAre you sure? [y/N] >> "
         consent = raw_input(prompt) if sys.version_info[0] == 2 else input(prompt)
         if consent.lower() != "y":
             sys.exit("Aborted.")

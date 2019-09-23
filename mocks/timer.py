@@ -43,7 +43,7 @@ STATS_JSON = """{
         "desc" : "exit code"
     },
     "times_ms" : {
-        "total" : %d
+        "total" : %f
     }
 }"""
 

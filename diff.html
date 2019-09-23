@@ -7,33 +7,34 @@
     <!-- CSS is based upon the one used by Python's difflib.HtmlDiff.make_file() -->
     <style type="text/css">
         .head {
-            font-family: Courier;
+            font-family: monospace;
             font-size: 20px;
         }
         table.diff {
-            font-family: Courier;
+            font-family: monospace;
             font-size: 12px;
             border: medium;
         }
         .info-key {
-            font-family: Courier;
+            font-family: monospace;
             font-size: 12px;
             font-weight: bold;
         }
         .info-value {
-            font-family: Courier;
+            font-family: monospace;
             font-size: 12px;
         }
         tr:hover {
             background-color: #b7ebfc50;
         }
         /* colored like GitHub */
-        .from_line {background-color:rgba(255, 225, 232, 0.7)}
-        [id^="from"] + td > span.diff_chg {background-color:rgba(242, 160, 171, 0.7)}
-        [id^="from"] + td > span.diff_sub {background-color:rgba(242, 160, 171, 0.7)}
-        .to_line {background-color:rgba(208, 253, 219, 0.7)}
-        [id^="to"] + td > span.diff_add {background-color: rgba(160, 247, 171, 0.8)}
-        [id^="to"] + td > span.diff_chg {background-color:rgba(160, 247, 171, 0.8)}
+        span.diff_add, span.diff_chg, span.diff_sub { border-radius: 0.2em }
+        .from_line {background-color:#ffeef0b7 }
+        [id^="from"] + td > span.diff_chg {background-color:#fdb8c0b7}
+        [id^="from"] + td > span.diff_sub {background-color:#fdb8c0b7}
+        .to_line {background-color:#e6ffedb7}
+        [id^="to"] + td > span.diff_add {background-color:#acf2bdb7}
+        [id^="to"] + td > span.diff_chg {background-color:#acf2bdb7}
         .diff_header { background-color:#e0e0e0 }
         td.diff_header { text-align:right }
         .diff_next {background-color:#eeeeee}
