@@ -5,6 +5,8 @@
 # File: view.py
 # ---------------------------
 # View the tests from browser.
+# For more information, see README.md.
+# For help: use '--help'.
 
 import os, sys
 import argparse

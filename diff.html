@@ -7,7 +7,7 @@
     <!-- CSS is based upon the one used by Python's difflib.HtmlDiff.make_file() -->
     <style type="text/css">
         .head {
-            font-family: monospace;
+            font-family: monospace; /* good on macOS and Linux */
             font-size: 20px;
         }
         table.diff {
@@ -32,14 +32,17 @@
         }
         /* colored like GitHub */
         span.diff_add, span.diff_chg, span.diff_sub { border-radius: 0.2em }
-        .from_line {background-color:#ffeef0b7 }
+        .from_line {background-color:#ffeef0b7}
         [id^="from"] + td > span.diff_chg {background-color:#fdb8c0b7}
         [id^="from"] + td > span.diff_sub {background-color:#fdb8c0b7}
         .to_line {background-color:#e6ffedb7}
         [id^="to"] + td > span.diff_add {background-color:#acf2bdb7}
         [id^="to"] + td > span.diff_chg {background-color:#acf2bdb7}
         .diff_header { background-color:#e0e0e0 }
-        td.diff_header { text-align:right }
+        td.diff_header {
+            text-align:right;
+            padding-right: 0.2ch;
+        }
         .diff_next {background-color:#eeeeee}
     </style>
     <script>

@@ -4,7 +4,9 @@
 #
 # File: runtest.py
 # ---------------------------
-# The script runs test driver(s).
+# Run tests with timer, logging, and HTML diff view (if any).
+# For more information, see README.md.
+# For help: use '--help' and '--docs'.
 
 import os, sys
 import json
@@ -49,8 +51,8 @@ signal.signal(signal.SIGTERM, sighandler)
 signal.signal(signal.SIGABRT, sighandler)
 signal.signal(signal.SIGSEGV, sighandler)
 
-def fix_width(s):
-    extra_space = TERMINAL_COLS - len(s)
+def fix_width(s, width=TERMINAL_COLS):
+    extra_space = width - len(s)
     return (s + ' ' * extra_space) if extra_space >= 0 else (s[:width - 3] + "...")
 
 # NOTE not a class, due to a flaw in multiprocessing.Pool.map() in Python2
@@ -107,27 +109,39 @@ def get_logfile_path_stem(log_dirname, metadata): # "stem" means no extension na
         args_hash = hashlib.sha1(' '.join(metadata["args"]).encode()).hexdigest()[:5]
     return "%s-%s" % (path_repr, args_hash)
 
-def print_error_result_to_stderr(result, timer):
+# when not using '--write-golden'
+def print_test_running_state_to_stderr(result, timer):
     rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
-    sys.stderr.write("\x1b[33m[error logged] %s\x1b[0m\n\tas expected: { \"exit\": %s, \"stdout\": %s }\n\t\x1b[2m%s\x1b[0m\n" % (
-        result["desc"], str(result["exit"]["ok"]), str(result["stdout"]["ok"]), rerun_command))
+    if result["ok"] == True:
+        sys.stderr.write("\x1b[36m[ok]    %s\x1b[0m\n" % result["desc"])
+    else:
+        assert(result["ok"] == False)
+        if len(result["exceptions"]):
+            assert(result["exceptions"][0] == GOLDEN_FILE_MISSING)
+            error_hint_string = "%s: %s" % (GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
+        else:
+            error_hint_string = "as expected: { \"exit\": %s, \"stdout\": %s }" % (
+                str(result["exit"]["ok"]), str(result["stdout"]["ok"]))
+        sys.stderr.write("\x1b[33m[error] %s\x1b[0m\n\t%s\n\t\x1b[2m%s\x1b[0m\n" % (
+            result["desc"], error_hint_string, rerun_command))
 
+# when using '--write-golden'
 def print_golden_overwriting_state_to_stderr(result, timer):
     attempted_golden_file = result["stdout"]["golden_file"]
     not_written_exceptions = [ e for e in result["exceptions"] if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX) ]
     rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
     assert(len(not_written_exceptions) <= 1)
     if len(not_written_exceptions) == 0:
-        sys.stderr.write("\x1b[36m[golden file content changed] %s\x1b[0m\n\twritten: %s (%d B)\n\t\x1b[2m%s\x1b[0m\n" % (
+        sys.stderr.write("\x1b[36m[ok: content changed] %s\x1b[0m\n\twritten: %s (%d B)\n\t\x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, os.path.getsize(attempted_golden_file), rerun_command))
         return None
     assert(len(not_written_exceptions) == 1)
     if GOLDEN_NOT_WRITTEN_SAME_CONTENT in not_written_exceptions:
-        sys.stderr.write("\x1b[36m[golden file same content] %s\x1b[0m\n\tskipped: %s\n\t\x1b[2m%s\x1b[0m\n" % (
+        sys.stderr.write("\x1b[36m[ok: same content] %s\x1b[0m\n\tskipped: %s\n\t\x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, rerun_command))
         return GOLDEN_NOT_WRITTEN_SAME_CONTENT
     elif GOLDEN_NOT_WRITTEN_WRONG_EXIT in not_written_exceptions:
-        sys.stderr.write("\x1b[33m[unexpected exit status] %s\x1b[0m\n\tskipped: %s\n\t\x1b[2m%s\x1b[0m\n" % (
+        sys.stderr.write("\x1b[33m[error: unexpected exit status] %s\x1b[0m\n\tskipped: %s\n\t\x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, rerun_command))
         return GOLDEN_NOT_WRITTEN_WRONG_EXIT # the only one item
     else:
@@ -234,6 +248,8 @@ def process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer
             if not found_golden:
                 exceptions.append(GOLDEN_FILE_MISSING)
             if stdout_comparison_diff != None: # write only if diff is not empty
+                # use abspath(): easier to copy-paste to browser
+                # ends with ".html": Chrome doesn't recognize mime, for various reasons
                 diff_filename = os.path.abspath(filepath_stem + ".diff.html")
                 write_file(diff_filename, stdout_comparison_diff, assert_str_non_empty=True)
     return generate_result_dict(
@@ -247,10 +263,10 @@ def write_master_log(args, num_tests, start_time, result_list):
         golden_written_count, golden_same_content_count, golden_wrong_exit_count = 0, 0, 0
     for result in result_list:
         wanted_to_write_this_golden = args.write_golden and result["stdout"]["golden_file"] != None
+        if not wanted_to_write_this_golden:
+            print_test_running_state_to_stderr(result, args.timer)
         if result["ok"] == False:
             error_result_count += 1
-            if not wanted_to_write_this_golden:
-                print_error_result_to_stderr(result, args.timer)
         if wanted_to_write_this_golden:
             not_written_reason = print_golden_overwriting_state_to_stderr(result, args.timer)
             if not_written_reason == GOLDEN_NOT_WRITTEN_SAME_CONTENT:
@@ -262,7 +278,7 @@ def write_master_log(args, num_tests, start_time, result_list):
     color_head = "\x1b[32m" if error_result_count == 0 else "\x1b[31m"
     if args.write_golden:
         sys.stderr.write("[Info] write golden files as expected stdout:\n")
-        sys.stderr.write("\t%d written, %d skipped (same content: %d, unexpected exit status: %d)\n" % (
+        sys.stderr.write("\t%d written, %d skipped (same content: %d, error: %d)\n" % (
             golden_written_count,
             golden_same_content_count + golden_wrong_exit_count,
             golden_same_content_count, golden_wrong_exit_count))
@@ -358,8 +374,8 @@ EXPLAINATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 
 \x1b[33m'--paths':\x1b[0m
     Using this option to pass executables' paths is convenient in some use
-    cases, as it doesn't require a metadata file be prepared: it's equivalent
-    to setting each test's metadata:
+    cases, as it doesn't require a metadata file to be prepared ahead of time:
+    it's equivalent to setting each test's metadata:
         desc = "", path = (path), args = [], golden = null, timeout_ms = null
         exit = { "type": "normal", "repr": 0 } (exit status, see below)
 
@@ -378,6 +394,13 @@ EXPLAINATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
               value (millisec, processor time) for "timeout" exit, signal
               value "signal" exit, and null for others (timer errors)
 
+\x1b[33mMaster log and result object:\x1b[0m
+    The master log is a JSON file containing an array of result objects. To
+    see the specification of the result object, please refer to the in-line
+    comments in function `generate_result_dict()`.
+    The master log is human-readable, but is more suited to be loaded by
+    another automation script to render it.
+
 \x1b[33mMore on concepts:\x1b[0m
     metadata        (self-evident) description of a test
     golden file     the file storing the expected stdout output
@@ -388,7 +411,7 @@ EXPLAINATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 \x1b[33mMore on options:\x1b[0m
     Concurrency is enabled, unless '--sequential' is given.
     Unless '--help' or '--docs' is given:
-        * '--timer' is needed, 
+        * '--timer' is needed, and
         * exactly one of '--paths' and '--meta' is needed.""" % DEFAULT_TIMEOUT
 
 def main():
