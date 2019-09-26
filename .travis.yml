@@ -1,0 +1,14 @@
+# for Travis CI
+language: python
+python:
+  - "2.7"
+  - "3.6"
+os:
+  # Travis doesn't support Python on macOS
+  - linux
+
+script:
+  - sanity/check-runtest.sh
+branches:
+  only:
+    - master

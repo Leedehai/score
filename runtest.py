@@ -25,7 +25,9 @@ sys.dont_write_bytecode = True
 LOG_FILE_BASE = "run.log"
 DELIMITER_STR = "#####"
 DEFAULT_TIMEOUT = 1500
-TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1])
+
+IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty() # testing might not be in a terminal
+TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY else 70
 
 # possible exceptions (not Python's Exceptions) for user inputs
 GOLDEN_NOT_WRITTEN_PREFIX = "golden file not written"
@@ -464,6 +466,8 @@ def main():
     if args.write_golden:
         prompt = "About to overwrite golden files of tests with their stdout.\nAre you sure? [y/N] >> "
         consent = raw_input(prompt) if sys.version_info[0] == 2 else input(prompt)
+        if not IS_ATTY:
+            print("%s" % consent)
         if consent.lower() == "y":
             old_metadata_list_len = len(metadata_list)
             metadata_list = [ m for m in metadata_list if m["golden"] != None ]

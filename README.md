@@ -1,5 +1,7 @@
 # testtools
 
+[![Build Status](https://travis-ci.com/Leedehai/testtools.svg?branch=master)](https://travis-ci.com/Leedehai/testtools)
+
 Utilities to run tests.
 
 ## Prerequsites:
@@ -41,7 +43,12 @@ Unless '--docs' is given, exactly one of '--paths' and '--meta' is needed.
 
 The timer program can be compiled from [ctimer](https://github.com/Leedehai/ctimer), written in C++ with POSIX system calls, another project of mine. Of course, you can use your own timer program instead (e.g. one that can run on Windows), as long as its commandline interface meets what is laid out in `./runtest.py --docs`. 
 
-#### Examples:
+#### Testing
+```sh
+sanity/check-runtest.sh
+```
+
+#### Examples
 ```sh
 # run tests that are all good
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1
