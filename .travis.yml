@@ -4,7 +4,7 @@ python:
   - "2.7"
   - "3.6"
 os:
-  # Travis doesn't support Python on macOS
+  # Travis doesn't support testing Python projects on macOS, as of today
   - linux
 
 script:
