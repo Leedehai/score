@@ -61,6 +61,10 @@ else
     printf "\033[32;1mmissing: delete_me.gold\n\033[0m"
     has_error=1
 fi
+if [ -f should_not_be_created.gold ] ; then
+    printf "\033[32;1mshould not exist: should_not_be_created.gold\n\033[0m"
+    has_error=1
+fi
 
 if [ $has_error -ne 1 ] ; then
     printf "\033[32;1m\nSummary: All is fine\n\033[0m"
