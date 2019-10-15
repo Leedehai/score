@@ -2,6 +2,11 @@
 
 has_error=0
 
+if [ ! -d sanity ]; then
+  echo "Your current working directory is not at the project root"
+  exit 1
+fi
+
 printf "\033[32;1m# run tests that are all good\n\033[0m"
 printf "\033[32;1m./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1\n\033[0m"
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1   || true
