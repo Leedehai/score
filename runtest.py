@@ -60,7 +60,7 @@ def fix_width(s, width=TERMINAL_COLS):
 
 # NOTE not a class, due to a flaw in multiprocessing.Pool.map() in Python2
 def get_metadata_from_path(path):
-    # docs: see EXPLAINATION_STRING below
+    # docs: see EXPLANATION_STRING below
     return {
         "desc": "",
         "path": path,
@@ -330,7 +330,32 @@ def run_all(args, metadata_list):
     error_count = write_master_log(args, num_tests, start_time, result_list)
     return 0 if error_count == 0 else 1
 
-EXPLAINATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
+NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
+    "desc", "path", "args", "golden", "timeout_ms", "exit"
+]
+NEEDED_EXIT_STATUS_OBJECT_FILED = [ # sync with EXPLANATION_STRING's spec
+    "type", "repr"
+]
+def get_matadata_list_format_error(metadata_list):
+    if type(metadata_list) != list:
+        return [ "matadata file does not store a JSON array " ]
+    errors = []
+    for i, metadata in enumerate(metadata_list):
+        if type(metadata) != dict:
+            errors.append("metadata #%d is not a JSON object" % (i + 1))
+            continue
+        for needed_metadata_field in NEEDED_METADATA_OBJECT_FIELD:
+            if needed_metadata_field not in metadata:
+                errors.append("metadata #%d does not contain field \"%s\"" % (
+                    (i + 1), needed_metadata_field))
+        if "exit" in metadata:
+            for needed_exit_status_field in NEEDED_EXIT_STATUS_OBJECT_FILED:
+                if needed_exit_status_field not in metadata["exit"]:
+                    errors.append("metadata #%d's \"exit\" object does not contain field \"%s\"" % (
+                        (i + 1), needed_exit_status_field))
+    return errors
+
+EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 
 \x1b[33m'--timer':\x1b[0m
     It passes the path of a timer program that measures a program's processor
@@ -437,7 +462,7 @@ def main():
     args = parser.parse_args()
 
     if args.docs:
-        print(EXPLAINATION_STRING)
+        print(EXPLANATION_STRING)
         return 0
 
     if args.timer == None:
@@ -463,6 +488,9 @@ def main():
                 metadata_list = json.load(f)
             except ValueError:
                 sys.exit("[Error] not a valid JSON file: %s" % args.meta)
+            errors = get_matadata_list_format_error(metadata_list)
+            if errors and len(errors):
+                sys.exit("[Error] metadata is bad, checkout '--docs' for requirements:\n\t" + "\n\t".join(errors))
 
     if os.path.isdir(args.log):
         # to prevent e.g. master log says all is good, but *.diff files from previous run exist
