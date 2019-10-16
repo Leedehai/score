@@ -9,6 +9,7 @@
 # For help: use '--help' and '--docs'.
 
 import os, sys
+import shutil
 import json
 import time
 import argparse
@@ -462,6 +463,12 @@ def main():
                 metadata_list = json.load(f)
             except ValueError:
                 sys.exit("[Error] not a valid JSON file: %s" % args.meta)
+
+    if os.path.isdir(args.log):
+        # to prevent e.g. master log says all is good, but *.diff files from previous run exist
+        shutil.rmtree(args.log)
+    elif os.path.exists(args.log):
+        sys.exit("[Error] path exists as a non-directory: %s" % args.log)
 
     if args.write_golden:
         prompt = "About to overwrite golden files of tests with their stdout.\nAre you sure? [y/N] >> "
