@@ -4,7 +4,7 @@
         "path": "normal.exe",
         "args": [],
         "golden": null,
-        "timeout_ms" : null,
+        "timeout_ms": 1500,
         "exit": {
             "type": "normal",
             "repr": 0
@@ -15,7 +15,7 @@
         "path": "normal.exe",
         "args": [],
         "golden": "mocks/lorem.gold",
-        "timeout_ms" : null,
+        "timeout_ms": 1500,
         "exit": {
             "type": "normal",
             "repr": 0
@@ -26,7 +26,7 @@
         "path": "normal.exe",
         "args": [ "--print" ],
         "golden": "mocks/do_not_create.gold",
-        "timeout_ms" : null,
+        "timeout_ms": 1500,
         "exit": {
             "type": "normal",
             "repr": 0
@@ -37,7 +37,7 @@
         "path": "normal.exe",
         "args": [ "--tweak-stdout" ],
         "golden": "mocks/lorem.gold",
-        "timeout_ms" : null,
+        "timeout_ms": 1500,
         "exit": {
             "type": "normal",
             "repr": 0
@@ -48,7 +48,7 @@
         "path": "timeout.exe",
         "args": [ "--print" ],
         "golden": "mocks/lorem.gold",
-        "timeout_ms" : null,
+        "timeout_ms": 1500,
         "exit": {
             "type": "normal",
             "repr": 0

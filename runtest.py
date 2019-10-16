@@ -25,7 +25,7 @@ sys.dont_write_bytecode = True
 
 LOG_FILE_BASE = "run.log"
 DELIMITER_STR = "#####"
-DEFAULT_TIMEOUT = 1500
+INFINITE_TIME = 0 # it means effectively infinite time required by timer
 
 IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty() # testing might not be in a terminal
 TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY else 70
@@ -186,7 +186,7 @@ def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden, std
         "desc": metadata["desc"], # str
         "path": metadata["path"], # str
         "args": metadata["args"], # list
-        "timeout_ms": metadata["timeout_ms"] if metadata["timeout_ms"] != None else DEFAULT_TIMEOUT, # int
+        "timeout_ms": metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME, # int
         "ok": all_ok, # boolean
         # details:
         "exit": {
@@ -259,6 +259,15 @@ def process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer
         metadata, ctimer_dict, match_exit, write_golden, stdout_filename, diff_filename, exceptions)
 
 # used by run_all()
+def remove_prev_log(args):
+    if os.path.isdir(args.log):
+        # to prevent e.g. master log says all is good, but *.diff files from previous run exist
+        print("[Info] remove log from a previous run: %s" % args.log)
+        shutil.rmtree(args.log)
+    elif os.path.exists(args.log):
+        sys.exit("[Error] path exists as a non-directory: %s" % args.log)
+
+# used by run_all()
 def write_master_log(args, num_tests, start_time, result_list):
     assert(len(result_list) == num_tests)
     error_result_count = 0
@@ -298,7 +307,7 @@ def run_one(input_args):
     timer, log_dirname, write_golden, metadata = input_args
     env_values = {
         "CTIMER_DELIMITER": DELIMITER_STR,
-        "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else DEFAULT_TIMEOUT)
+        "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME)
     }
     g_lock.acquire()
     sys.stderr.write(fix_width("\rRUN %s" % metadata["desc"]))
@@ -317,6 +326,7 @@ def run_one(input_args):
 
 NUM_WORKERS_MAX = 2 * multiprocessing.cpu_count()
 def run_all(args, metadata_list):
+    remove_prev_log(args)
     num_tests = len(metadata_list)
     num_workers = 1 if args.sequential else min(num_tests, NUM_WORKERS_MAX)
     sys.stderr.write("[Info] Start running %d tests, worker count: %d ...\n" % (
@@ -365,7 +375,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
         commandline arguments:
             the invocation of the inspected program
         environment variable CTIMER_TIMEOUT:
-            timeout value (ms); if not given, use the default value
+            timeout value (ms); 0 means effectively infinite time
         environment variable CTIMER_STATS:
             file path to write stats report; if not given, print to stdout
         environment variable CTIMER_DELIMITER:
@@ -397,7 +407,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
             * tests with the same expected stdout should not share the same
               file, to avoid race condition when '--write-golden' is given
         "timeout_ms" : integer or null
-            the max processor time (ms); null: using default (%d)
+            the max processor time (ms); null: effectively infinite
         "exit"    : exit status object (see below), the expected exit status
 
 \x1b[33m'--paths':\x1b[0m
@@ -440,7 +450,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     Concurrency is enabled, unless '--sequential' is given.
     Unless '--help' or '--docs' is given:
         * '--timer' is needed, and
-        * exactly one of '--paths' and '--meta' is needed.""" % DEFAULT_TIMEOUT
+        * exactly one of '--paths' and '--meta' is needed."""
 
 def main():
     parser = argparse.ArgumentParser(description="Test runner: with timer, logging, diff in HTML",
@@ -491,12 +501,6 @@ def main():
             errors = get_matadata_list_format_errors(metadata_list) # sanity check
             if errors and len(errors):
                 sys.exit("[Error] metadata is bad, checkout '--docs' for requirements:\n\t" + "\n\t".join(errors))
-
-    if os.path.isdir(args.log):
-        # to prevent e.g. master log says all is good, but *.diff files from previous run exist
-        shutil.rmtree(args.log)
-    elif os.path.exists(args.log):
-        sys.exit("[Error] path exists as a non-directory: %s" % args.log)
 
     if args.write_golden:
         prompt = "About to overwrite golden files of tests with their stdout.\nAre you sure? [y/N] >> "
