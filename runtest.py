@@ -336,7 +336,7 @@ NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
 NEEDED_EXIT_STATUS_OBJECT_FILED = [ # sync with EXPLANATION_STRING's spec
     "type", "repr"
 ]
-def get_matadata_list_format_error(metadata_list):
+def get_matadata_list_format_errors(metadata_list):
     if type(metadata_list) != list:
         return [ "matadata file does not store a JSON array " ]
     errors = []
@@ -488,7 +488,7 @@ def main():
                 metadata_list = json.load(f)
             except ValueError:
                 sys.exit("[Error] not a valid JSON file: %s" % args.meta)
-            errors = get_matadata_list_format_error(metadata_list)
+            errors = get_matadata_list_format_errors(metadata_list) # sanity check
             if errors and len(errors):
                 sys.exit("[Error] metadata is bad, checkout '--docs' for requirements:\n\t" + "\n\t".join(errors))
 
