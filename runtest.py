@@ -310,8 +310,9 @@ def run_one(input_args):
         "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME)
     }
     g_lock.acquire()
-    sys.stderr.write(fix_width("\rRUN %s" % metadata["desc"]))
+    sys.stderr.write(fix_width("\rSTART %s" % metadata["desc"]))
     sys.stderr.flush()
+    time.sleep(0.05) # adds runtime overhead, but prettier to let the printout stay for a while?
     g_lock.release()
     with open(os.devnull, 'w') as devnull:
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
