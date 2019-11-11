@@ -190,7 +190,7 @@ def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden, std
         "ok": all_ok, # boolean
         # details:
         "exit": {
-            "ok": match_exit, # boolean
+            "ok": match_exit, # boolean: exit type and repr both match with expected
             # "type"  : string - "normal", "timeout", "signal", "quit", "unknown"
             # "repr"  : integer, indicating the exit code for "normal" exit, timeout
             #     value (millisec, processor time) for "timeout" exit, signal
@@ -302,6 +302,14 @@ def write_master_log(args, num_tests, start_time, result_list):
         color_head, time.time() - start_time, num_tests - error_result_count, num_tests, log_filename))
     return error_result_count
 
+class global_lock: # across child processes
+    def __init__(self):
+        pass
+    def __enter__(self):
+        g_lock.acquire()
+    def __exit__(self, etype, value, traceback):
+        g_lock.release()
+
 def run_one(input_args):
     signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore SIGINT, required by pool_map()
     timer, log_dirname, write_golden, metadata = input_args
@@ -309,21 +317,27 @@ def run_one(input_args):
         "CTIMER_DELIMITER": DELIMITER_STR,
         "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME)
     }
-    g_lock.acquire()
-    sys.stderr.write(fix_width("\rSTART %s" % metadata["desc"]))
-    sys.stderr.flush()
-    time.sleep(0.05) # adds runtime overhead, but prettier to let the printout stay for a while?
-    g_lock.release()
+
     with open(os.devnull, 'w') as devnull:
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
         try:
             stdout = subprocess.check_output(
                 [ timer, metadata["path"] ] + metadata["args"], stderr=devnull, env=env_values).decode().rstrip()
         except subprocess.CalledProcessError as e:
-            raise RuntimeError("CalledProcessError (exit %d): %s" % (e.returncode, e.cmd))
+            # the code path signals an internal error of the timer program (see '--docs')
+            raise RuntimeError("Internal error (exit %d): %s" % (e.returncode, e.cmd))
     inspectee_stdout_raw, ctimer_stdout = split_ctimer_out(stdout)
     inspectee_stdout = process_inspectee_stdout(inspectee_stdout_raw)
-    return process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout)
+    run_one_result = process_stdout( # return a dict
+        log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout)
+    with global_lock():
+        if run_one_result["ok"] == True:
+            sys.stderr.write(fix_width("\rDONE %s" % metadata["desc"]))
+            time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
+        else: # details or error will be printed after all execution
+            sys.stderr.write(fix_width("\r\x1b[31mERROR\x1b[0m %s\n" % metadata["desc"])) # linebreak
+        sys.stderr.flush()
+    return run_one_result
 
 NUM_WORKERS_MAX = 2 * multiprocessing.cpu_count()
 def run_all(args, metadata_list):
@@ -391,6 +405,8 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
         "exit"     : exit status object (see below), inspectee's exit status
         "times_ms" : object:
             "total" : integer, inspectee's total processor time
+    note: the timer should always exit with 0 regardless of the inspected
+          program's exit status; non-0 exit is reserved for internal error.
 
 \x1b[33m'--meta':\x1b[0m
     This option passes the path of a file containing the metadata of tests.
