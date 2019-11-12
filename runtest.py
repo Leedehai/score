@@ -30,6 +30,20 @@ INFINITE_TIME = 0 # it means effectively infinite time required by timer
 IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty() # testing might not be in a terminal
 TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY else 70
 
+def get_num_workers(env_var):
+    env_num_workers = os.environ.get(env_var, "")
+    if len(env_num_workers):
+        try:
+            env_num_workers_number = int(env_num_workers)
+        except ValueError:
+            sys.exit("[Error] env vairable '%s' is not an integer" % env_var)
+        if env_num_workers_number <= 0:
+            sys.exit("[Error] env variable '%s' is not positive" % env_var)
+        return env_num_workers_number
+    else:
+        return 2 * multiprocessing.cpu_count()
+NUM_WORKERS_MAX = get_num_workers(env_var="NUM_WORKERS") # not "NUM_WORKERS_MAX", to be consistent
+
 # possible exceptions (not Python's Exceptions) for user inputs
 GOLDEN_NOT_WRITTEN_PREFIX = "golden file not written"
 GOLDEN_NOT_WRITTEN_SAME_CONTENT  = "%s: content is the same" % GOLDEN_NOT_WRITTEN_PREFIX
@@ -339,7 +353,6 @@ def run_one(input_args):
         sys.stderr.flush()
     return run_one_result
 
-NUM_WORKERS_MAX = 2 * multiprocessing.cpu_count()
 def run_all(args, metadata_list):
     remove_prev_log(args)
     num_tests = len(metadata_list)
