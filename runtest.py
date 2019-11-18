@@ -29,6 +29,8 @@ INFINITE_TIME = 0 # it means effectively infinite time required by timer
 
 IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty() # testing might not be in a terminal
 TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY else 70
+if (TERMINAL_COLS <= 25):
+    sys.exit("[Error] terminal width (%d) is rediculously small" % TERMINAL_COLS)
 
 def get_num_workers(env_var):
     env_num_workers = os.environ.get(env_var, "")
@@ -70,7 +72,7 @@ signal.signal(signal.SIGSEGV, sighandler)
 
 def fix_width(s, width=TERMINAL_COLS):
     extra_space = width - len(s)
-    return (s + ' ' * extra_space) if extra_space >= 0 else (s[:width - 3] + "...")
+    return (s + ' ' * extra_space) if extra_space >= 0 else (s[:12] + "..." + s[len(s) - width - 15:])
 
 # NOTE not a class, due to a flaw in multiprocessing.Pool.map() in Python2
 def get_metadata_from_path(path):
@@ -346,10 +348,10 @@ def run_one(input_args):
         log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout)
     with global_lock():
         if run_one_result["ok"] == True:
-            sys.stderr.write(fix_width("\rDONE %s" % metadata["desc"]))
+            sys.stderr.write(fix_width("DONE %s" % metadata["desc"]) + '\r')
             time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
         else: # details or error will be printed after all execution
-            sys.stderr.write(fix_width("\r\x1b[31mERROR\x1b[0m %s\n" % metadata["desc"])) # linebreak
+            sys.stderr.write(fix_width("\x1b[33;1merror\x1b[0m %s\n" % metadata["desc"]) + '\r') # has linebreak
         sys.stderr.flush()
     return run_one_result
 
