@@ -1,6 +1,6 @@
-# testtools
+# score
 
-[![Build Status](https://travis-ci.com/Leedehai/testtools.svg?branch=master)](https://travis-ci.com/Leedehai/testtools)
+[![Build Status](https://travis-ci.com/Leedehai/score.svg?branch=master)](https://travis-ci.com/Leedehai/score)
 
 Utilities to run tests.
 

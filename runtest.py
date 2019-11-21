@@ -182,10 +182,17 @@ def create_dir_if_needed(dirname):
 def process_inspectee_stdout(s):
     # remove color sequences
     s = re.sub("\x1b\[.*?m", "", s)
-    # wrap to column width = 90
-    old_lines, new_lines = s.splitlines(False), []
-    for line in old_lines:
-        new_lines += [ (part + "\n") for part in re.findall(r'.{0,90}', line) ]
+    # do not use textwrap: unstable
+    new_lines, cur_line, cnt = [], "", 0
+    for c in s: # for each character
+        cur_line += c
+        cnt += 1
+        if c == '\n':
+            new_lines.append(cur_line) # ends with '\n'
+            cur_line, cnt = "", 0
+        elif cnt == 90: # this limit is used by diff.html and diffhtmlstr.py
+            new_lines.append(cur_line + '\n') # force linebreak
+            cur_line, cnt = "", 0
     return ''.join(new_lines)
 
 def write_file(filename, s, assert_str_non_empty=False):

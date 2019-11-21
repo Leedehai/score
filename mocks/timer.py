@@ -30,10 +30,7 @@ orci a. Dignissim diam quis enim lobortis. Aliquet porttitor lacus luctus accums
 tortor at risus viverra adipiscing at."""
 
 INSPECTEE_STDOUT_RAW_TWEAKED = INSPECTEE_STDOUT_RAW\
-.replace("or", "su")\
-.replace("consectetur", "\nPrivacy is paramount to us, in everything we do. So today, we are announcing a new initiative to develop a set of open standards to fundamentally enhance privacy on the web. We're calling this a Privacy Sandbox.\n")\
-.replace("Etiam tempor orci eu lobortis elementum nibh tellus molestie. Neque egestas congue quisque egestas. Egestas integer eget aliquet nibh praesent tristique. Vulputate mi sit amet mauris. Sodales neque sodales ut etiam sit. Dignissim suspendisse in est ante", "")\
-.replace("egestas fringilla phasellus", "\nWe've long believed that over time companies tend to get comfortable doing the same thing, just making incremental changes. But in the technology industry, where revolutionary ideas drive the next big growth areas, you need to be a bit uncomfortable to stay relevant.\n")
+.replace("malesuada.\n", "\nPrivacy is paramount to us, in everything we do. So today, we are announcing a new initiative to develop a set of open standards to fundamentally enhance privacy on the web. We're calling this a Privacy Sandbox.\n")
 
 STATS_JSON = """{
     "pid" : 35871,
