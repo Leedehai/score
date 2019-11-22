@@ -1,4 +1,5 @@
 # score
+> Formerly "testtools"
 
 [![Build Status](https://travis-ci.com/Leedehai/score.svg?branch=master)](https://travis-ci.com/Leedehai/score)
 
