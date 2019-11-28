@@ -284,8 +284,8 @@ def process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer
 # used by run_all()
 def remove_prev_log(args):
     if os.path.isdir(args.log):
-        # to prevent e.g. master log says all is good, but *.diff files from previous run exist
-        print("[Info] remove log from a previous run: %s" % args.log)
+        # to prevent perplexing cases e.g. master log says all is good, but *.diff files
+        # from a previous run exist
         shutil.rmtree(args.log)
     elif os.path.exists(args.log):
         sys.exit("[Error] path exists as a non-directory: %s" % args.log)
@@ -312,7 +312,7 @@ def write_master_log(args, num_tests, start_time, result_list):
                 golden_written_count += 1
     color_head = "\x1b[32m" if error_result_count == 0 else "\x1b[31m"
     if args.write_golden:
-        sys.stderr.write("[Info] write golden files as expected stdout:\n")
+        sys.stderr.write("Golden file writing:\n")
         sys.stderr.write("\t%d written, %d skipped (same content: %d, error: %d)\n" % (
             golden_written_count,
             golden_same_content_count + golden_wrong_exit_count,
@@ -366,7 +366,7 @@ def run_all(args, metadata_list):
     remove_prev_log(args)
     num_tests = len(metadata_list)
     num_workers = 1 if args.sequential else min(num_tests, NUM_WORKERS_MAX)
-    sys.stderr.write("[Info] Start running %d tests, worker count: %d ...\n" % (
+    sys.stderr.write("Running %d tests, worker count: %d ...\n" % (
         num_tests, num_workers))
     start_time = time.time()
     result_list = pool_map(num_workers, run_one, [
