@@ -10,6 +10,7 @@
 
 import os, sys
 import shutil
+import copy
 import json
 import time
 import argparse
@@ -126,10 +127,10 @@ def get_logfile_path_stem(log_dirname, metadata): # "stem" means no extension na
     args_hash = "00000"
     if len(metadata["args"]):
         args_hash = hashlib.sha1(' '.join(metadata["args"]).encode()).hexdigest()[:5]
-    return "%s-%s" % (path_repr, args_hash)
+    return "%s-%s-%s" % (path_repr, args_hash, metadata["repeat"]["count"])
 
 # when not using '--write-golden'
-def print_test_running_state_to_stderr(result, timer):
+def print_test_running_result_to_stderr(result, timer):
     rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
     if result["ok"] == True:
         sys.stderr.write("\x1b[36m[ok]    %s\x1b[0m\n" % result["desc"])
@@ -145,7 +146,7 @@ def print_test_running_state_to_stderr(result, timer):
             result["desc"], error_hint_string, rerun_command))
 
 # when using '--write-golden'
-def print_golden_overwriting_state_to_stderr(result, timer):
+def print_golden_overwriting_result_to_stderr(result, timer):
     attempted_golden_file = result["stdout"]["golden_file"]
     not_written_exceptions = [ e for e in result["exceptions"] if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX) ]
     rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
@@ -203,12 +204,14 @@ def write_file(filename, s, assert_str_non_empty=False):
     with open(filename, 'w') as f:
         f.write(s)
 
+# used by process_stdout()
 def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden, stdout_filename, diff_filename, exceptions):
     all_ok = match_exit and diff_filename == None
     return {
         "desc": metadata["desc"], # str
         "path": metadata["path"], # str
         "args": metadata["args"], # list
+        "repeat": metadata["repeat"], # dict { "count": int, "all": int }
         "timeout_ms": metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME, # int
         "ok": all_ok, # boolean
         # details:
@@ -240,7 +243,7 @@ def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden, std
         "exceptions": exceptions # list of str, describe errors encountered in run_one() (not in test)
     } # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
 
-# used by run_one()
+# used by run_one_impl()
 def process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout):
     assert(len(ctimer_stdout))
     ctimer_dict = json.loads(ctimer_stdout)
@@ -248,7 +251,8 @@ def process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer
                   and metadata["exit"]["repr"] == ctimer_dict["exit"]["repr"]) # metadata["exit"] may have more keys
     exceptions = [] # list of str, describe misc errors in run_one() itself (not in test)
     filepath_stem = get_logfile_path_stem(log_dirname, metadata)
-    stdout_filename, diff_filename = None if write_golden else filepath_stem + ".stdout", None
+    stdout_filename = None if write_golden else filepath_stem + ".stdout"
+    diff_filename = None
     if not write_golden:
         write_file(stdout_filename, inspectee_stdout) # stdout could be ""
     if metadata["golden"] != None: # write or compare only if "golden" is not None
@@ -299,11 +303,11 @@ def write_master_log(args, num_tests, start_time, result_list):
     for result in result_list:
         wanted_to_write_this_golden = args.write_golden and result["stdout"]["golden_file"] != None
         if not wanted_to_write_this_golden:
-            print_test_running_state_to_stderr(result, args.timer)
+            print_test_running_result_to_stderr(result, args.timer)
         if result["ok"] == False:
             error_result_count += 1
         if wanted_to_write_this_golden:
-            not_written_reason = print_golden_overwriting_state_to_stderr(result, args.timer)
+            not_written_reason = print_golden_overwriting_result_to_stderr(result, args.timer)
             if not_written_reason == GOLDEN_NOT_WRITTEN_SAME_CONTENT:
                 golden_same_content_count += 1
             elif not_written_reason == GOLDEN_NOT_WRITTEN_WRONG_EXIT:
@@ -333,14 +337,8 @@ class global_lock: # across child processes
     def __exit__(self, etype, value, traceback):
         g_lock.release()
 
-def run_one(input_args):
-    signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore SIGINT, required by pool_map()
-    timer, log_dirname, write_golden, metadata = input_args
-    env_values = {
-        "CTIMER_DELIMITER": DELIMITER_STR,
-        "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME)
-    }
-
+# used by run_one()
+def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
     with open(os.devnull, 'w') as devnull:
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
         try:
@@ -351,16 +349,30 @@ def run_one(input_args):
             raise RuntimeError("Internal error (exit %d): %s" % (e.returncode, e.cmd))
     inspectee_stdout_raw, ctimer_stdout = split_ctimer_out(stdout)
     inspectee_stdout = process_inspectee_stdout(inspectee_stdout_raw)
-    run_one_result = process_stdout( # return a dict
+    run_one_single_result = process_stdout( # return a dict
         log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout)
+    if metadata["repeat"]["all"] > 1:
+        metadata_desc = "(repeat %d/%d) %s" % (
+            metadata["repeat"]["count"], metadata["repeat"]["all"], metadata["desc"])
+    else:
+        metadata_desc = metadata["desc"]
     with global_lock():
-        if run_one_result["ok"] == True:
-            sys.stderr.write(fix_width("DONE %s" % metadata["desc"]) + '\r')
+        if run_one_single_result["ok"] == True:
+            sys.stderr.write(fix_width("DONE %s" % metadata_desc) + '\r')
             time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
         else: # details or error will be printed after all execution
-            sys.stderr.write(fix_width("\x1b[33;1merror\x1b[0m %s\n" % metadata["desc"]) + '\r') # has linebreak
+            sys.stderr.write(fix_width("\x1b[33;1merror\x1b[0m %s\n" % metadata_desc) + '\r') # has linebreak
         sys.stderr.flush()
-    return run_one_result
+    return run_one_single_result
+
+def run_one(input_args):
+    signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore SIGINT, required by pool_map()
+    timer, log_dirname, write_golden, metadata = input_args
+    env_values = {
+        "CTIMER_DELIMITER": DELIMITER_STR,
+        "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME)
+    }
+    return run_one_impl(timer, log_dirname, write_golden, env_values, metadata)
 
 def run_all(args, metadata_list):
     remove_prev_log(args)
@@ -372,7 +384,7 @@ def run_all(args, metadata_list):
     result_list = pool_map(num_workers, run_one, [
         (args.timer, args.log, args.write_golden, metadata) for metadata in metadata_list
     ])
-    sys.stderr.write("\r")
+    sys.stderr.write(fix_width("Completed, writing logs ...") + '\n')
     sys.stderr.flush()
     error_count = write_master_log(args, num_tests, start_time, result_list)
     return 0 if error_count == 0 else 1
@@ -502,6 +514,8 @@ def main():
                         help="paths to test executables")
     parser.add_argument("-g", "--log", metavar="DIR", type=str, default="./logs",
                         help="directory to write logs, default: ./logs")
+    parser.add_argument("-n", "--times", metavar="N", type=int, default=1,
+                        help="run each test N times, default: 1")
     parser.add_argument("-1", "--sequential", action="store_true",
                         help="run sequentially instead concurrently")
     parser.add_argument("-w", "--write-golden", action="store_true",
@@ -522,6 +536,8 @@ def main():
     if ((len(args.paths) == 0 and args.meta == None)
      or (len(args.paths) > 0 and args.meta != None)):
         sys.exit("[Error] exactly one of '--paths' and '--meta' should be given.")
+    if args.times != 1 and args.write_golden:
+        sys.exit("[Error] '--times' and '--write-golden' cannot be used together.")
 
     metadata_list = None
     if len(args.paths):
@@ -555,7 +571,15 @@ def main():
         else:
             sys.exit("Aborted.")
 
-    return run_all(args, metadata_list)
+    if len(metadata_list) == 0:
+        sys.exit("[Error] no test found.")
+    metadata_list_with_times = []
+    for metadata in metadata_list:
+        for i in range(args.times): # not 'xrange()' to accommodate both Python2 and Python3, nasty Python
+            metadata_copy = copy.deepcopy(metadata)
+            metadata_copy["repeat"] = { "count": i + 1, "all": args.times }
+            metadata_list_with_times.append(metadata_copy)
+    return run_all(args, metadata_list_with_times)
 
 if __name__ == "__main__":
     sys.exit(main())
