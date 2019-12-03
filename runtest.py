@@ -33,6 +33,9 @@ TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY els
 if (TERMINAL_COLS <= 25):
     sys.exit("[Error] terminal width (%d) is rediculously small" % TERMINAL_COLS)
 
+# function named differently: nasty python
+irange = range if sys.version_info.major >= 3 else xrange
+
 def get_num_workers(env_var):
     env_num_workers = os.environ.get(env_var, "")
     if len(env_num_workers):
@@ -71,9 +74,9 @@ signal.signal(signal.SIGTERM, sighandler)
 signal.signal(signal.SIGABRT, sighandler)
 signal.signal(signal.SIGSEGV, sighandler)
 
-def fix_width(s, width=TERMINAL_COLS):
+def cap_width(s, width=TERMINAL_COLS):
     extra_space = width - len(s)
-    return (s + ' ' * extra_space) if extra_space >= 0 else (s[:12] + "..." + s[len(s) - width - 15:])
+    return s if extra_space >= 0 else (s[:12] + "..." + s[len(s) - width - 15:])
 
 # NOTE not a class, due to a flaw in multiprocessing.Pool.map() in Python2
 def get_metadata_from_path(path):
@@ -92,14 +95,22 @@ def get_metadata_from_path(path):
 # KeyboardInterrupt cannot cleanly kill a multiprocessing.Pool()'s child processes, printing verbosely
 # https://stackoverflow.com/a/6191991/8385554
 # NOTE each 'func' has to ignore SIGINT for the aforementioned fix to work
+# NOTE do not use 'threading' due to GIL (global interpreter lock)
 def pool_map(num_workers, func, inputs):
-    def init_lock(lock):
+    def init_shared_mem(lock, queue, count):
         global g_lock
         g_lock = lock
+        global g_queue
+        g_queue = queue
+        global g_count
+        g_count = count
     l = multiprocessing.Lock()
-    pool = multiprocessing.Pool(num_workers, initializer=init_lock, initargs=(l,))
+    mgr = multiprocessing.Manager()
+    q, count = mgr.Queue(5), mgr.Value('i', 0)
+    pool = multiprocessing.Pool(num_workers, initializer=init_shared_mem, initargs=(l, q, count))
     try:
         res = pool.map(func, inputs)
+        clear_rotating_log(q)
     except KeyboardInterrupt:
         pool.terminate()
         pool.join()
@@ -182,7 +193,7 @@ def create_dir_if_needed(dirname):
 
 def process_inspectee_stdout(s):
     # remove color sequences
-    s = re.sub("\x1b\[.*?m", "", s)
+    s = re.sub(r"\x1b\[.*?m", "", s)
     # do not use textwrap: unstable
     new_lines, cur_line, cnt = [], "", 0
     for c in s: # for each character
@@ -337,6 +348,27 @@ class global_lock: # across child processes
     def __exit__(self, etype, value, traceback):
         g_lock.release()
 
+def add_rotating_log(q, s): # must be protected by a lock
+    for _ in irange(q.qsize()):
+        sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clear entire line
+    if q.full():
+        q.get()
+    temp_arr = []
+    while not q.empty():
+        e = q.get()
+        temp_arr.append(e)
+        sys.stderr.write(e)
+    sys.stderr.write(s)
+    for e in temp_arr:
+        q.put(e)
+    q.put(s)
+
+def clear_rotating_log(q):
+    cur_size = q.qsize()
+    for _ in irange(cur_size):
+        sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clear entire line
+        q.get()
+
 # used by run_one()
 def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
     with open(os.devnull, 'w') as devnull:
@@ -357,11 +389,15 @@ def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
     else:
         metadata_desc = metadata["desc"]
     with global_lock():
+        g_count.value += 1
         if run_one_single_result["ok"] == True:
-            sys.stderr.write(fix_width("DONE %s" % metadata_desc) + '\r')
+            logline = cap_width("DONE %3s %s" % (g_count.value, metadata_desc)) + '\n'
+            add_rotating_log(g_queue, logline)
             time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
         else: # details or error will be printed after all execution
-            sys.stderr.write(fix_width("\x1b[33;1merror\x1b[0m %s\n" % metadata_desc) + '\r') # has linebreak
+            logline = cap_width("\x1b[33;1merror\x1b[0m %3s %s" % (g_count.value, metadata_desc)) + '\n'
+            clear_rotating_log(g_queue)
+            sys.stderr.write(logline)
         sys.stderr.flush()
     return run_one_single_result
 
@@ -384,7 +420,7 @@ def run_all(args, metadata_list):
     result_list = pool_map(num_workers, run_one, [
         (args.timer, args.log, args.write_golden, metadata) for metadata in metadata_list
     ])
-    sys.stderr.write(fix_width("Completed, writing logs ...") + '\n')
+    sys.stderr.write(cap_width("Completed, writing logs ...") + '\n')
     sys.stderr.flush()
     error_count = write_master_log(args, num_tests, start_time, result_list)
     return 0 if error_count == 0 else 1
@@ -575,7 +611,7 @@ def main():
         sys.exit("[Error] no test found.")
     metadata_list_with_times = []
     for metadata in metadata_list:
-        for i in range(args.times): # not 'xrange()' to accommodate both Python2 and Python3, nasty Python
+        for i in irange(args.times):
             metadata_copy = copy.deepcopy(metadata)
             metadata_copy["repeat"] = { "count": i + 1, "all": args.times }
             metadata_list_with_times.append(metadata_copy)
