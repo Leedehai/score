@@ -21,6 +21,7 @@ Run tests in parallel with designated timer.
 - checks each test's exit status and stdout,
 - if stdout is not as expected, generates a HTML for the diff
 - program is self-documented
+- print logs in realtime [with multiline rotation](img/multiline-rotation.md)
 
 ```sh
 $ ./runtest.py --help
