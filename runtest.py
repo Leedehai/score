@@ -7,24 +7,33 @@
 # Run tests with timer, logging, and HTML diff view (if any).
 # For more information, see README.md.
 # For help: use '--help' and '--docs'.
+# NOTE all non-help messages are printed to stderr because stderr is
+#      unbuffered by default so it works well with multiprocessing.
 
 import os, sys
-import shutil
-import copy
-import json
-import time
 import argparse
-import multiprocessing
-import subprocess
-import signal
+import collections
+import copy
 import hashlib
+import json
+import multiprocessing
+import platform
+import random
 import re
-from diffhtmlstr import get_diff_html_str # mine
+import shutil
+import signal
+import subprocess
+import time
+# custom modules
+from diffhtmlstr import get_diff_html_str
+from flakiness import parse_flakiness_suppressions
 
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
 
 LOG_FILE_BASE = "run.log"
+CTIMER_DELIMITER_ENVKEY = "CTIMER_DELIMITER"
+CTIMER_TIMEOUT_ENVKEY = "CTIMER_TIMEOUT"
 DELIMITER_STR = "#####"
 INFINITE_TIME = 0 # it means effectively infinite time required by timer
 
@@ -35,6 +44,28 @@ if (TERMINAL_COLS <= 25):
 
 # function named differently: nasty python
 irange = range if sys.version_info.major >= 3 else xrange
+
+def guess_emulator_supports_hyperlink():
+    if ("SSH_CLIENT" in os.environ) or ("SSH_CONNECTION" in os.environ) or ("SSH_TTY" in os.environ):
+        return False
+    if platform.system().lower() == "linux":
+        return True # VTE terminals (GNOME, Guake, Tilix, ...) are fine
+    elif platform.system().lower() == "darwin": # macOS
+        if os.environ.get("TERM_PROGRAM", "").lower().startswith("apple"):
+            return False # Apple's default Terminal.app is lame, recommend iTerm2.app
+        return True
+    return False
+
+# Make a hyperlink in terminal without displaying the lengthy URL
+# https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
+# Compatible with GNOME, iTerm2, Guake, hTerm, etc.
+# NOTE the URL should not contain ';' or ':' or ASCII code outside 32-126.
+def hyperlink_str(url, description="link"):
+    if "://" not in url:
+        url = "file://" + os.path.abspath(url)
+    if (not IS_ATTY) or (not guess_emulator_supports_hyperlink()):
+        return url
+    return "\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\" % (url, description)
 
 def get_num_workers(env_var):
     env_num_workers = os.environ.get(env_var, "")
@@ -58,16 +89,7 @@ GOLDEN_FILE_MISSING = "golden file missing"
 
 # Set signal handlers
 def sighandler(sig, frame):
-    if sig == signal.SIGINT:
-        sys.stderr.write("[SIGNAL] SIGINT sent to script %s\n" % os.path.basename(__file__))
-    elif sig == signal.SIGTERM:
-        sys.stderr.write("[SIGNAL] SIGTERM sent to script %s\n" % os.path.basename(__file__))
-    elif sig == signal.SIGABRT:
-        sys.stderr.write("[SIGNAL] SIGABRT sent to script %s\n" % os.path.basename(__file__))
-    elif sig == signal.SIGSEGV:
-        sys.stderr.write("[SIGNAL] SIGSEGV sent to script %s\n" % os.path.basename(__file__))
-    else:
-        sys.stderr.write("[SIGNAL] Signal %d sent to script %s\n" % (sig, os.path.basename(__file__)))
+    # do not print: it's ugly for all workers to print together
     sys.exit(1)
 signal.signal(signal.SIGINT, sighandler)
 signal.signal(signal.SIGTERM, sighandler)
@@ -105,9 +127,16 @@ def pool_map(num_workers, func, inputs):
         global g_count
         g_count = count
     l = multiprocessing.Lock()
-    mgr = multiprocessing.Manager()
-    q, count = mgr.Queue(5), mgr.Value('i', 0)
-    pool = multiprocessing.Pool(num_workers, initializer=init_shared_mem, initargs=(l, q, count))
+    # On macOS, a multiprocessing queue must be instantiated from
+    # multiprocessing.Manager().Queue() instead of directory from
+    # multiprocessing.Queue(). Otherwise, its qsize() method will
+    # raise a NotImplementedError.. nasty Python. This is a known
+    # bug: https://github.com/vterron/lemon/issues/11
+    # Another solution: https://github.com/keras-team/autokeras/issues/368#issuecomment-461625748
+    mgr = multiprocessing.Manager() # creates a server process
+    q, c = mgr.Queue(5), mgr.Value('i', 0)
+    pool = multiprocessing.Pool(
+        num_workers, initializer=init_shared_mem, initargs=(l, q, c))
     try:
         res = pool.map(func, inputs)
         clear_rotating_log(q)
@@ -130,37 +159,68 @@ def split_ctimer_out(s):
     ctimer_stdout = s[ctimer_begin_index + len(DELIMITER_STR) : report_end_index]
     return inspectee_stdout.rstrip(), ctimer_stdout.rstrip()
 
-def get_logfile_path_stem(log_dirname, metadata): # "stem" means no extension name such as ".diff"
-    prog = metadata["path"]
+def get_timeout(timeout):
+    return str(timeout if timeout != None else INFINITE_TIME)
+
+# Pick a hash length
+# N = 16^8 = 2^32 => ~N^(1/2) = ~2^16 values produces a collision with P=50%
+ARGS_HASH_LEN = 8 # NOTE value should sync with EXPLANATION_STRING below
+# This "ID" is made of the last two path components and the hashcode of args, e.g.
+# prog = "foo", args = []              => return: "foo-00000000"
+# prog = "baz/bar/foo", args = []      => return: "bar/foo-00000000"
+# prog = "baz/bar/foo", args = [ '9' ] => return: "bar/foo-0ade7c2c"
+def compute_case_id(prog, args):
     prog_basename = os.path.basename(prog)
     prog_dir_basename = os.path.basename(os.path.dirname(prog)) # "" if prog doesn't contain '/'
-    path_repr = os.path.join(log_dirname, prog_dir_basename, prog_basename)
-    args_hash = "00000"
-    if len(metadata["args"]):
-        args_hash = hashlib.sha1(' '.join(metadata["args"]).encode()).hexdigest()[:5]
-    return "%s-%s-%s" % (path_repr, args_hash, metadata["repeat"]["count"])
+    path_repr = os.path.join(prog_dir_basename, prog_basename)
+    args_hash = '0' * ARGS_HASH_LEN
+    if len(args):
+        args_hash = hashlib.sha1(' '.join(args).encode()).hexdigest()[:ARGS_HASH_LEN]
+    return "%s-%s" % (path_repr, args_hash.lower())
+
+# This path stem (meaning there is no extension such as ".diff") is made of the
+# computed ID (see compute_case_id()), repeat count, log_dirname. E.g.
+# ID = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
+#   => return: "./out/foo/logs/bar/foo-0ade7c2c-3"
+def get_logfile_path_stem(computed_case_id, repeat_count, log_dirname): # "stem" means no extension name such as ".diff"
+    return "%s-%s" % (os.path.join(log_dirname, computed_case_id), repeat_count)
+
+# used by print_test_running_result_to_stderr()
+def result_status_field(result, field):
+    return (
+        ("\x1b[31m" if False == result[field]["ok"] else "\x1b[0m")
+        + ("\"%s\": " % field) + str(result[field]["ok"]).lower()
+        + "\x1b[0m"
+    )
 
 # when not using '--write-golden'
 def print_test_running_result_to_stderr(result, timer):
-    rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
+    timeout_env = "%s=%s" % (CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
+    rerun_command = ' '.join([ timeout_env, timer, '\\\n\t', result["path"] ] + result["args"])
     if result["ok"] == True:
-        sys.stderr.write("\x1b[36m[ok]    %s\x1b[0m\n" % result["desc"])
+        pass
+        # sys.stderr.write("\x1b[36m[ok]    %s\x1b[0m\n" % result["desc"])
     else:
         assert(result["ok"] == False)
         if len(result["exceptions"]):
             assert(result["exceptions"][0] == GOLDEN_FILE_MISSING)
             error_hint_string = "%s: %s" % (GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
         else:
-            error_hint_string = "as expected: { \"exit\": %s, \"stdout\": %s }" % (
-                str(result["exit"]["ok"]), str(result["stdout"]["ok"]))
-        sys.stderr.write("\x1b[33m[error] %s\x1b[0m\n\t%s\n\t\x1b[2m%s\x1b[0m\n" % (
-            result["desc"], error_hint_string, rerun_command))
+            error_hint_string = "as expected: { %s, %s }" % (
+                result_status_field(result, "exit"), result_status_field(result, "stdout"))
+        if result["repeat"]["all"] > 1:
+            repeat_report = " (repeat %d/%d)" % (result["repeat"]["count"], result["repeat"]["all"])
+        else:
+            repeat_report = ""
+        sys.stderr.write("\x1b[33m[error] %s\x1b[0m%s\n\t%s\n\t\x1b[2m%s\x1b[0m\n" % (
+            result["desc"], repeat_report, error_hint_string, rerun_command))
 
 # when using '--write-golden'
 def print_golden_overwriting_result_to_stderr(result, timer):
     attempted_golden_file = result["stdout"]["golden_file"]
     not_written_exceptions = [ e for e in result["exceptions"] if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX) ]
-    rerun_command = ' '.join([ timer, result["path"] ] + result["args"])
+    timeout_env = "%s=%s" % (CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
+    rerun_command = ' '.join([ timeout_env, timer, '\\\n\t', result["path"] ] + result["args"])
     assert(len(not_written_exceptions) <= 1)
     if len(not_written_exceptions) == 0:
         sys.stderr.write("\x1b[36m[ok: content changed] %s\x1b[0m\n\twritten: %s (%d B)\n\t\x1b[2m%s\x1b[0m\n" % (
@@ -215,54 +275,71 @@ def write_file(filename, s, assert_str_non_empty=False):
     with open(filename, 'w') as f:
         f.write(s)
 
-# used by process_stdout()
-def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden, stdout_filename, diff_filename, exceptions):
+# used by make_result()
+def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden,
+                         start_abs_time, end_abs_time, computed_case_id,
+                         stdout_filename, diff_filename, exceptions):
     all_ok = match_exit and diff_filename == None
-    return {
-        "desc": metadata["desc"], # str
-        "path": metadata["path"], # str
-        "args": metadata["args"], # list
-        "repeat": metadata["repeat"], # dict { "count": int, "all": int }
-        "timeout_ms": metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME, # int
-        "ok": all_ok, # boolean
+    golden_filename = os.path.abspath(metadata["golden"]) if metadata["golden"] else None
+    return collections.OrderedDict([
+        # success
+        ("ok", all_ok), # boolean
+        # metadata
+        ("desc", metadata["desc"]), # str
+        ("path", metadata["path"]), # str
+        ("args", metadata["args"]), # list
+        ("case_id", computed_case_id), # unique for every (path, args) combination
+        ("repeat", metadata["repeat"]), # dict { "count": int, "all": int }
+        # time measurements
+        ("timeout_ms", metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME), # int
+        ("times_ms", collections.OrderedDict([
+            ("proc", ctimer_reports["times_ms"]["total"]),
+            ("abs_start", start_abs_time * 1000.0),
+            ("abs_end", end_abs_time * 1000.0),
+        ])),
         # details:
-        "exit": {
-            "ok": match_exit, # boolean: exit type and repr both match with expected
+        ("exit", collections.OrderedDict([
+            ("ok", match_exit), # boolean: exit type and repr both match with expected
             # "type"  : string - "normal", "timeout", "signal", "quit", "unknown"
             # "repr"  : integer, indicating the exit code for "normal" exit, timeout
             #     value (millisec, processor time) for "timeout" exit, signal
             #     value "signal" exit, and null for others (timer errors)
-            "expected": {
-                "type": metadata["exit"]["type"], # str
-                "repr": metadata["exit"]["repr"]  # int
-            },
-            "real": {
-                "type": ctimer_reports["exit"]["type"], # str
-                "repr": ctimer_reports["exit"]["repr"]  # int
-            },
-        },
-        "stdout": {
-            "ok": None if write_golden else (diff_filename == None), # boolean, or None for '--write-golden'
-            "actual_file": stdout_filename,    # path (str), or None meaning no stdout or written to golden file
-            "golden_file": metadata["golden"], # path (str), or None meaning no need to compare
-            "diff_file":   diff_filename       # path (str), or None meaning 1) if "golden_file" == None: no need to compare
-                                               #                          or 2) if "golden_file" != None: no diff found
-        },
-        "times_ms" : {
-            "total": ctimer_reports["times_ms"]["total"],
-        },
-        "exceptions": exceptions # list of str, describe errors encountered in run_one() (not in test)
-    } # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
+            ("expected", collections.OrderedDict([
+                ("type", metadata["exit"]["type"]), # str
+                ("repr", metadata["exit"]["repr"])  # int
+            ])),
+            ("real", collections.OrderedDict([
+                ("type", ctimer_reports["exit"]["type"]), # str
+                ("repr", ctimer_reports["exit"]["repr"])  # int
+            ])),
+        ])),
+        ("stdout", collections.OrderedDict([
+            # boolean, or None for '--write-golden' NOTE it is True if there's no need to compare
+            ("ok", None if write_golden else (diff_filename == None)),
+            # abs path (str), or None meaning no need to compare
+            ("golden_file", golden_filename),
+            # abs path (str), or None meaning no stdout or written to golden file
+            ("actual_file", stdout_filename),
+            # abs path (str), or None meaning 1) if "golden_file" == None: no need to compare
+            #                              or 2) if "golden_file" != None: no diff found
+            ("diff_file",   diff_filename)
+        ])),
+        ("exceptions", exceptions) # list of str, describe errors encountered in run_one() (not in test)
+    ]) # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
 
 # used by run_one_impl()
-def process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout):
+def make_result(log_dirname, write_golden, metadata,
+                inspectee_stdout, ctimer_stdout,
+                start_abs_time, end_abs_time):
     assert(len(ctimer_stdout))
     ctimer_dict = json.loads(ctimer_stdout)
     match_exit = (metadata["exit"]["type"] == ctimer_dict["exit"]["type"]
                   and metadata["exit"]["repr"] == ctimer_dict["exit"]["repr"]) # metadata["exit"] may have more keys
     exceptions = [] # list of str, describe misc errors in run_one() itself (not in test)
-    filepath_stem = get_logfile_path_stem(log_dirname, metadata)
-    stdout_filename = None if write_golden else filepath_stem + ".stdout"
+    computed_case_id = compute_case_id(metadata["path"], metadata["args"])
+    filepath_stem = get_logfile_path_stem( # "stem" means no extension name
+        computed_case_id, metadata["repeat"]["count"], log_dirname)
+    stdout_filename = None if write_golden else os.path.abspath(filepath_stem + ".stdout")
     diff_filename = None
     if not write_golden:
         write_file(stdout_filename, inspectee_stdout) # stdout could be ""
@@ -289,12 +366,13 @@ def process_stdout(log_dirname, write_golden, metadata, inspectee_stdout, ctimer
             if not found_golden:
                 exceptions.append(GOLDEN_FILE_MISSING)
             if stdout_comparison_diff != None: # write only if diff is not empty
-                # use abspath(): easier to copy-paste to browser
-                # ends with ".html": Chrome doesn't recognize mime, for various reasons
                 diff_filename = os.path.abspath(filepath_stem + ".diff.html")
                 write_file(diff_filename, stdout_comparison_diff, assert_str_non_empty=True)
     return generate_result_dict(
-        metadata, ctimer_dict, match_exit, write_golden, stdout_filename, diff_filename, exceptions)
+        metadata, ctimer_dict, match_exit, write_golden,
+        start_abs_time, end_abs_time, computed_case_id,
+        stdout_filename, diff_filename, exceptions
+    )
 
 # used by run_all()
 def remove_prev_log(args):
@@ -308,37 +386,60 @@ def remove_prev_log(args):
 # used by run_all()
 def write_master_log(args, num_tests, start_time, result_list):
     assert(len(result_list) == num_tests)
-    error_result_count = 0
+    log_filename = os.path.join(args.log, LOG_FILE_BASE)
     if args.write_golden:
-        golden_written_count, golden_same_content_count, golden_wrong_exit_count = 0, 0, 0
+        error_count, unique_error_count = count_and_print_for_golden_writing(
+            log_filename, result_list, args.timer)
+    else:
+        error_count, unique_error_count = count_and_print_for_test_running(
+            log_filename, result_list, args.timer)
+    create_dir_if_needed(args.log)
+    with open(log_filename, 'w') as f:
+        json.dump(result_list, f, indent=2) # keys' order already arranged
+    color = "\x1b[32m" if error_count == 0 else "\x1b[31m"
+    sys.stderr.write("%sDone: passed %d/%d%s, %.2f sec, log: %s\x1b[0m\n" % (
+        color,
+        num_tests - error_count,
+        num_tests,
+        "" if error_count == 0 else (" (unique error: %d)" % unique_error_count),
+        time.time() - start_time,
+        hyperlink_str(log_filename)
+    ))
+    return error_count, unique_error_count
+
+# used by write_master_log(), returns error count and unique error count (but
+# args.repeat == 1 when writing gold, so the two values are the same)
+def count_and_print_for_golden_writing(log_filename, result_list, timer_prog):
+    error_result_count = 0
+    golden_written_count = 0
+    golden_same_content_count, golden_wrong_exit_count = 0, 0
     for result in result_list:
-        wanted_to_write_this_golden = args.write_golden and result["stdout"]["golden_file"] != None
-        if not wanted_to_write_this_golden:
-            print_test_running_result_to_stderr(result, args.timer)
+        assert(result["stdout"]["golden_file"] != None)
         if result["ok"] == False:
             error_result_count += 1
-        if wanted_to_write_this_golden:
-            not_written_reason = print_golden_overwriting_result_to_stderr(result, args.timer)
-            if not_written_reason == GOLDEN_NOT_WRITTEN_SAME_CONTENT:
-                golden_same_content_count += 1
-            elif not_written_reason == GOLDEN_NOT_WRITTEN_WRONG_EXIT:
-                golden_wrong_exit_count += 1
-            elif not_written_reason == None:
-                golden_written_count += 1
-    color_head = "\x1b[32m" if error_result_count == 0 else "\x1b[31m"
-    if args.write_golden:
-        sys.stderr.write("Golden file writing:\n")
-        sys.stderr.write("\t%d written, %d skipped (same content: %d, error: %d)\n" % (
-            golden_written_count,
-            golden_same_content_count + golden_wrong_exit_count,
-            golden_same_content_count, golden_wrong_exit_count))
-    create_dir_if_needed(args.log)
-    log_filename = os.path.join(args.log, LOG_FILE_BASE)
-    with open(log_filename, 'w') as f:
-        json.dump(result_list, f, indent=2, sort_keys=True)
-    sys.stderr.write("%sDone: %.2f sec, passed: %d/%d, log: %s\x1b[0m\n" % (
-        color_head, time.time() - start_time, num_tests - error_result_count, num_tests, log_filename))
-    return error_result_count
+        written_or_not = print_golden_overwriting_result_to_stderr(result, timer_prog)
+        if written_or_not == GOLDEN_NOT_WRITTEN_SAME_CONTENT:
+            golden_same_content_count += 1
+        elif written_or_not == GOLDEN_NOT_WRITTEN_WRONG_EXIT:
+            golden_wrong_exit_count += 1
+        elif written_or_not == None:
+            golden_written_count += 1
+    sys.stderr.write("Golden file writing:\n")
+    sys.stderr.write("\t%d written, %d skipped (same content: %d, error: %d)\n" % (
+        golden_written_count,
+        golden_same_content_count + golden_wrong_exit_count,
+        golden_same_content_count, golden_wrong_exit_count))
+    return error_result_count, error_result_count
+
+# used by write_master_log(), returns error count and unique error count
+def count_and_print_for_test_running(log_filename, result_list, timer_prog):
+    error_result_count, unique_error_tests = 0, set()
+    for result in result_list:
+        if result["ok"] == False:
+            error_result_count += 1
+            unique_error_tests.add(result["case_id"])
+        print_test_running_result_to_stderr(result, timer_prog)
+    return error_result_count, len(unique_error_tests)
 
 class global_lock: # across child processes
     def __init__(self):
@@ -348,13 +449,13 @@ class global_lock: # across child processes
     def __exit__(self, etype, value, traceback):
         g_lock.release()
 
-def add_rotating_log(q, s): # must be protected by a lock
+def add_rotating_log(q, s): # must be protected by a lock: make qsize() reliable
     for _ in irange(q.qsize()):
         sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clear entire line
     if q.full():
         q.get()
     temp_arr = []
-    while not q.empty():
+    while q.qsize() > 0: # empty() is unreliable: nasty Python
         e = q.get()
         temp_arr.append(e)
         sys.stderr.write(e)
@@ -366,7 +467,7 @@ def add_rotating_log(q, s): # must be protected by a lock
 def clear_rotating_log(q):
     cur_size = q.qsize()
     for _ in irange(cur_size):
-        sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clear entire line
+        sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clears entire line
         q.get()
 
 # used by run_one()
@@ -374,24 +475,28 @@ def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
     with open(os.devnull, 'w') as devnull:
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
         try:
+            start_abs_time = time.time()
             stdout = subprocess.check_output(
                 [ timer, metadata["path"] ] + metadata["args"], stderr=devnull, env=env_values).decode().rstrip()
+            end_abs_time = time.time()
         except subprocess.CalledProcessError as e:
             # the code path signals an internal error of the timer program (see '--docs')
             raise RuntimeError("Internal error (exit %d): %s" % (e.returncode, e.cmd))
     inspectee_stdout_raw, ctimer_stdout = split_ctimer_out(stdout)
     inspectee_stdout = process_inspectee_stdout(inspectee_stdout_raw)
-    run_one_single_result = process_stdout( # return a dict
-        log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout)
+    run_one_single_result = make_result( # return a dict
+        log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout,
+        start_abs_time, end_abs_time
+    )
     if metadata["repeat"]["all"] > 1:
-        metadata_desc = "(repeat %d/%d) %s" % (
+        metadata_desc = "(%d/%d) %s" % (
             metadata["repeat"]["count"], metadata["repeat"]["all"], metadata["desc"])
     else:
         metadata_desc = metadata["desc"]
     with global_lock():
         g_count.value += 1
         if run_one_single_result["ok"] == True:
-            logline = cap_width("DONE %3s %s" % (g_count.value, metadata_desc)) + '\n'
+            logline = cap_width("\x1b[36mdone\x1b[0m %3s %s" % (g_count.value, metadata_desc)) + '\n'
             add_rotating_log(g_queue, logline)
             time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
         else: # details or error will be printed after all execution
@@ -405,8 +510,8 @@ def run_one(input_args):
     signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore SIGINT, required by pool_map()
     timer, log_dirname, write_golden, metadata = input_args
     env_values = {
-        "CTIMER_DELIMITER": DELIMITER_STR,
-        "CTIMER_TIMEOUT"  : str(metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME)
+        CTIMER_DELIMITER_ENVKEY : DELIMITER_STR,
+        CTIMER_TIMEOUT_ENVKEY   : get_timeout(metadata["timeout_ms"])
     }
     return run_one_impl(timer, log_dirname, write_golden, env_values, metadata)
 
@@ -420,9 +525,9 @@ def run_all(args, metadata_list):
     result_list = pool_map(num_workers, run_one, [
         (args.timer, args.log, args.write_golden, metadata) for metadata in metadata_list
     ])
-    sys.stderr.write(cap_width("Completed, writing logs ...") + '\n')
+    sys.stderr.write(cap_width("Completed, writing logs ...\r"))
     sys.stderr.flush()
-    error_count = write_master_log(args, num_tests, start_time, result_list)
+    error_count, _ = write_master_log(args, num_tests, start_time, result_list)
     return 0 if error_count == 0 else 1
 
 NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
@@ -474,7 +579,9 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     stats report: a JSON string, representing an object:
         "exit"     : exit status object (see below), inspectee's exit status
         "times_ms" : object:
-            "total" : integer, inspectee's total processor time
+            "proc"      : floating point, inspectee's time on processor
+            "abs_start" : floating point, absolute start time since Epoch
+            "abs_end"   : floating point, absolute end time since Epoch
     note: the timer should always exit with 0 regardless of the inspected
           program's exit status; non-0 exit is reserved for internal error.
 
@@ -498,11 +605,29 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
         "exit"    : exit status object (see below), the expected exit status
 
 \x1b[33m'--paths':\x1b[0m
-    Using this option to pass executables' paths is convenient in some use
+    Use this option to pass executables' paths is convenient in some use
     cases, as it doesn't require a metadata file to be prepared ahead of time:
     it's equivalent to setting each test's metadata:
         desc = "", path = (path), args = [], golden = null, timeout_ms = null
         exit = { "type": "normal", "repr": 0 } (exit status, see below)
+
+\x1b[33m'--flakiness':\x1b[0m
+    Not unusually, some tests are flaky (e.g. due to CPU scheduling or a bug
+    in a language runtime). Use this option to provide a file that documents
+    flakiness suppression. In this file, characters following '#' in a line
+    are ignored, and each non-ignored line is an entry with space-separated
+    string fields in order:
+        - test executable path (last two path components joined with '/')
+        - argument hash string, computed by i) joining args with single blank
+          spaces, and then ii) compute its SHA1 base16 representation (as an
+          exception, all-zeros if there's no argument), then iii) take the
+          first 8 digits
+        - type of expected error: 'exit' for exit status mismatch (including
+          wrong exit code, timeout, signal), 'stdout' for stdout mismatch
+        * joining the first two fields joined with '-' produces the 'case_id'
+          of the corresponding result object in the master log (see below)
+        * example: a line could be "foo/bar-test 00000000 exit", and its
+          'case_id' in the master log is "foo/bar-test-00000000"
 
 \x1b[33m'--write-golden':\x1b[0m
     Use this option to create or overwrite golden files of tests. Tests with
@@ -550,10 +675,14 @@ def main():
                         help="paths to test executables")
     parser.add_argument("-g", "--log", metavar="DIR", type=str, default="./logs",
                         help="directory to write logs, default: ./logs")
-    parser.add_argument("-n", "--times", metavar="N", type=int, default=1,
+    parser.add_argument("-n", "--repeat", metavar="N", type=int, default=1,
                         help="run each test N times, default: 1")
     parser.add_argument("-1", "--sequential", action="store_true",
                         help="run sequentially instead concurrently")
+    parser.add_argument("-s", "--seed", metavar="S", type=int, default=None,
+                        help="set the seed for the random number generator")
+    parser.add_argument("-k", "--flakiness", metavar="F", type=str, default=None,
+                        help="flakiness suppression file")
     parser.add_argument("-w", "--write-golden", action="store_true",
                         help="write stdout to golden files instead of checking")
     parser.add_argument("--docs", action="store_true",
@@ -572,8 +701,10 @@ def main():
     if ((len(args.paths) == 0 and args.meta == None)
      or (len(args.paths) > 0 and args.meta != None)):
         sys.exit("[Error] exactly one of '--paths' and '--meta' should be given.")
-    if args.times != 1 and args.write_golden:
-        sys.exit("[Error] '--times' and '--write-golden' cannot be used together.")
+    if args.seed != None and args.write_golden:
+        sys.exit("[Error] '--seed' and '--write-golden' cannot be used together.")
+    if args.repeat != 1 and args.write_golden:
+        sys.exit("[Error] '--repeat' and '--write-golden' cannot be used together.")
 
     metadata_list = None
     if len(args.paths):
@@ -611,11 +742,15 @@ def main():
         sys.exit("[Error] no test found.")
     metadata_list_with_times = []
     for metadata in metadata_list:
-        for i in irange(args.times):
+        for i in irange(args.repeat): # if args.repeat != 1, then args.write_golden is False
             metadata_copy = copy.deepcopy(metadata)
-            metadata_copy["repeat"] = { "count": i + 1, "all": args.times }
+            metadata_copy["repeat"] = { "count": i + 1, "all": args.repeat }
             metadata_list_with_times.append(metadata_copy)
-    return run_all(args, metadata_list_with_times)
+    if not args.write_golden:
+        random.seed(args.seed) # if args.seed == None, use a system-provided randomness source
+        random.shuffle(metadata_list_with_times)
+    run_all(args, metadata_list_with_times)
+    return 0 # regardless of whether all tests succeeded
 
 if __name__ == "__main__":
     sys.exit(main())
