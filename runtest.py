@@ -26,7 +26,7 @@ import subprocess
 import time
 # custom modules
 from diffhtmlstr import get_diff_html_str
-from flakiness import parse_flakiness_suppressions
+from flakiness import parse_flakiness_decls
 
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
@@ -78,7 +78,7 @@ def get_num_workers(env_var):
             sys.exit("[Error] env variable '%s' is not positive" % env_var)
         return env_num_workers_number
     else:
-        return 2 * multiprocessing.cpu_count()
+        return multiprocessing.cpu_count() + 2
 NUM_WORKERS_MAX = get_num_workers(env_var="NUM_WORKERS") # not "NUM_WORKERS_MAX", to be consistent
 
 # possible exceptions (not Python's Exceptions) for user inputs
@@ -169,7 +169,8 @@ ARGS_HASH_LEN = 8 # NOTE value should sync with EXPLANATION_STRING below
 # prog = "foo", args = []              => return: "foo-00000000"
 # prog = "baz/bar/foo", args = []      => return: "bar/foo-00000000"
 # prog = "baz/bar/foo", args = [ '9' ] => return: "bar/foo-0ade7c2c"
-def compute_case_id(prog, args):
+def compute_comb_id(prog, args):
+    assert(type(args) == list)
     prog_basename = os.path.basename(prog)
     prog_dir_basename = os.path.basename(os.path.dirname(prog)) # "" if prog doesn't contain '/'
     path_repr = os.path.join(prog_dir_basename, prog_basename)
@@ -179,11 +180,11 @@ def compute_case_id(prog, args):
     return "%s-%s" % (path_repr, args_hash.lower())
 
 # This path stem (meaning there is no extension such as ".diff") is made of the
-# computed ID (see compute_case_id()), repeat count, log_dirname. E.g.
-# ID = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
+# comb_id, repeat count, log_dirname. E.g.
+# comb_id = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
 #   => return: "./out/foo/logs/bar/foo-0ade7c2c-3"
-def get_logfile_path_stem(computed_case_id, repeat_count, log_dirname): # "stem" means no extension name such as ".diff"
-    return "%s-%s" % (os.path.join(log_dirname, computed_case_id), repeat_count)
+def get_logfile_path_stem(comb_id, repeat_count, log_dirname): # "stem" means no extension name such as ".diff"
+    return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
 # used by print_test_running_result_to_stderr()
 def result_status_field(result, field):
@@ -193,27 +194,35 @@ def result_status_field(result, field):
         + "\x1b[0m"
     )
 
+UNEXPECTED_ERROR_FORMAT = """\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
+  {error_hint_string}
+  \x1b[2m{rerun_command}\x1b[0m
+"""
 # when not using '--write-golden'
 def print_test_running_result_to_stderr(result, timer):
     timeout_env = "%s=%s" % (CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
     rerun_command = ' '.join([ timeout_env, timer, '\\\n\t', result["path"] ] + result["args"])
-    if result["ok"] == True:
+    if result["ok"] == True or result["error_is_flaky"] == True:
         pass
-        # sys.stderr.write("\x1b[36m[ok]    %s\x1b[0m\n" % result["desc"])
     else:
         assert(result["ok"] == False)
-        if len(result["exceptions"]):
-            assert(result["exceptions"][0] == GOLDEN_FILE_MISSING)
+        result_exceptions = result["exceptions"]
+        if len(result_exceptions):
+            assert(len(result_exceptions) == 1 and result_exceptions[0] == GOLDEN_FILE_MISSING)
             error_hint_string = "%s: %s" % (GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
         else:
-            error_hint_string = "as expected: { %s, %s }" % (
+            error_hint_string = "%s, %s" % (
                 result_status_field(result, "exit"), result_status_field(result, "stdout"))
         if result["repeat"]["all"] > 1:
             repeat_report = " (repeat %d/%d)" % (result["repeat"]["count"], result["repeat"]["all"])
         else:
             repeat_report = ""
-        sys.stderr.write("\x1b[33m[error] %s\x1b[0m%s\n\t%s\n\t\x1b[2m%s\x1b[0m\n" % (
-            result["desc"], repeat_report, error_hint_string, rerun_command))
+        sys.stderr.write(UNEXPECTED_ERROR_FORMAT.format(
+            desc = result["desc"],
+            repeat = repeat_report,
+            error_hint_string = error_hint_string,
+            rerun_command = rerun_command
+        ))
 
 # when using '--write-golden'
 def print_golden_overwriting_result_to_stderr(result, timer):
@@ -251,6 +260,15 @@ def create_dir_if_needed(dirname):
     except OSError: # Python2 throws OSError, Python3 throws its subclass FileExistsError
         pass        # dir already exists (due to multiprocessing)
 
+# can be used concurrently
+def write_file(filename, s, assert_str_non_empty=False):
+    assert(s != None)
+    if assert_str_non_empty:
+        assert(s != "")
+    create_dir_if_needed(os.path.dirname(filename))
+    with open(filename, 'w') as f:
+        f.write(s)
+
 def process_inspectee_stdout(s):
     # remove color sequences
     s = re.sub(r"\x1b\[.*?m", "", s)
@@ -267,28 +285,45 @@ def process_inspectee_stdout(s):
             cur_line, cnt = "", 0
     return ''.join(new_lines)
 
-def write_file(filename, s, assert_str_non_empty=False):
-    assert(s != None)
-    if assert_str_non_empty:
-        assert(s != "")
-    create_dir_if_needed(os.path.dirname(filename))
-    with open(filename, 'w') as f:
-        f.write(s)
+# exit type: Sync with EXPLANATION_STRING
+    # "normal", "timeout", "signal", "quit", "unknown"
+EXIT_TYPE_TO_FLAKINESS_ERR = {
+    "normal":  "WrongExitCode",
+    "timeout": "Timeout",
+    "signal":  "Signal",
+    "quit":    "Others",
+    "unknown": "Others"
+}
+# used by generate_result_dict()
+# NOTE this function is called ONLY IF there is an error
+def check_if_error_is_flaky(expected_errs, actual_exit_type, has_stdout_diff):
+    if len(expected_errs) == 0:
+        return False
+    # NOTE expected_errs might only cover one of the errors
+    if has_stdout_diff == True and ("StdoutDiff" not in expected_errs):
+        return False
+    return EXIT_TYPE_TO_FLAKINESS_ERR[actual_exit_type] in expected_errs
 
-# used by make_result()
+# used by did_run_one()
 def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden,
-                         start_abs_time, end_abs_time, computed_case_id,
+                         start_abs_time, end_abs_time,
                          stdout_filename, diff_filename, exceptions):
     all_ok = match_exit and diff_filename == None
     golden_filename = os.path.abspath(metadata["golden"]) if metadata["golden"] else None
+    error_is_flaky = None
+    if not all_ok:
+        error_is_flaky = check_if_error_is_flaky(
+            metadata["flaky_errors"], ctimer_reports["exit"]["type"], diff_filename != None)
     return collections.OrderedDict([
         # success
         ("ok", all_ok), # boolean
+        ("error_is_flaky", error_is_flaky), # boolean, or None for all_ok == True
         # metadata
         ("desc", metadata["desc"]), # str
         ("path", metadata["path"]), # str
         ("args", metadata["args"]), # list
-        ("case_id", computed_case_id), # unique for every (path, args) combination
+        ("comb_id", metadata["comb_id"]), # unique for every (path, args) combination
+        ("flaky_errors", metadata["flaky_errors"]), # list of str, the expected errors
         ("repeat", metadata["repeat"]), # dict { "count": int, "all": int }
         # time measurements
         ("timeout_ms", metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME), # int
@@ -328,7 +363,7 @@ def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden,
     ]) # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
 
 # used by run_one_impl()
-def make_result(log_dirname, write_golden, metadata,
+def did_run_one(log_dirname, write_golden, metadata,
                 inspectee_stdout, ctimer_stdout,
                 start_abs_time, end_abs_time):
     assert(len(ctimer_stdout))
@@ -336,9 +371,8 @@ def make_result(log_dirname, write_golden, metadata,
     match_exit = (metadata["exit"]["type"] == ctimer_dict["exit"]["type"]
                   and metadata["exit"]["repr"] == ctimer_dict["exit"]["repr"]) # metadata["exit"] may have more keys
     exceptions = [] # list of str, describe misc errors in run_one() itself (not in test)
-    computed_case_id = compute_case_id(metadata["path"], metadata["args"])
     filepath_stem = get_logfile_path_stem( # "stem" means no extension name
-        computed_case_id, metadata["repeat"]["count"], log_dirname)
+        metadata["comb_id"], metadata["repeat"]["count"], log_dirname)
     stdout_filename = None if write_golden else os.path.abspath(filepath_stem + ".stdout")
     diff_filename = None
     if not write_golden:
@@ -370,9 +404,43 @@ def make_result(log_dirname, write_golden, metadata,
                 write_file(diff_filename, stdout_comparison_diff, assert_str_non_empty=True)
     return generate_result_dict(
         metadata, ctimer_dict, match_exit, write_golden,
-        start_abs_time, end_abs_time, computed_case_id,
+        start_abs_time, end_abs_time,
         stdout_filename, diff_filename, exceptions
     )
+
+# used by run_one_impl()
+def print_one_on_the_fly(metadata, run_one_single_result):
+    # below is printing on the fly
+    if metadata["repeat"]["all"] > 1:
+        metadata_desc = "%d/%d %s" % (
+            metadata["repeat"]["count"], metadata["repeat"]["all"], metadata["desc"])
+    else:
+        metadata_desc = metadata["desc"]
+    is_ok = run_one_single_result["ok"] # successful run
+    should_stay_on_console = False
+    if is_ok:
+        if len(run_one_single_result["flaky_errors"]):
+            status_head = "\x1b[36mflaky success\x1b[0m"
+        else: # definite success
+            status_head = "\x1b[36msuccess\x1b[0m"
+    else: # test error
+        if run_one_single_result["error_is_flaky"]:
+            status_head = "\x1b[36mflaky error\x1b[0m"
+        else: # definite error
+            should_stay_on_console = True
+            status_head = "\x1b[33;1merror\x1b[0m"
+    with global_lock():
+        # keep runtime overhead here as simple as possible
+        g_count.value += 1
+        if should_stay_on_console: # definite error, details will be printed after all execution
+            logline = cap_width("%s %3s %s" % (status_head, g_count.value, metadata_desc)) + '\n'
+            clear_rotating_log(g_queue)
+            sys.stderr.write(logline)
+        else: # definite success, flaky success, flaky error
+            logline = cap_width("%s %3s %s" % (status_head, g_count.value, metadata_desc)) + '\n'
+            add_rotating_log(g_queue, logline)
+            time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
+        sys.stderr.flush()
 
 # used by run_all()
 def remove_prev_log(args):
@@ -384,8 +452,8 @@ def remove_prev_log(args):
         sys.exit("[Error] path exists as a non-directory: %s" % args.log)
 
 # used by run_all()
-def write_master_log(args, num_tests, start_time, result_list):
-    assert(len(result_list) == num_tests)
+def write_master_log(args, num_tasks, start_time, result_list):
+    assert(len(result_list) == num_tasks)
     log_filename = os.path.join(args.log, LOG_FILE_BASE)
     if args.write_golden:
         error_count, unique_error_count = count_and_print_for_golden_writing(
@@ -395,13 +463,12 @@ def write_master_log(args, num_tests, start_time, result_list):
             log_filename, result_list, args.timer)
     create_dir_if_needed(args.log)
     with open(log_filename, 'w') as f:
-        json.dump(result_list, f, indent=2) # keys' order already arranged
+        json.dump(result_list, f, indent=2) # no "sort_keys=True", due to OrderedDict
     color = "\x1b[32m" if error_count == 0 else "\x1b[31m"
-    sys.stderr.write("%sDone: passed %d/%d%s, %.2f sec, log: %s\x1b[0m\n" % (
-        color,
-        num_tests - error_count,
-        num_tests,
-        "" if error_count == 0 else (" (unique error: %d)" % unique_error_count),
+    sys.stderr.write("%sDone: %s tasks, definite error %d%s, %.2f sec, log: %s\x1b[0m\n" % (
+        color, num_tasks,
+        error_count,
+        "" if error_count == 0 else (" (unique: %d)" % unique_error_count),
         time.time() - start_time,
         hyperlink_str(log_filename)
     ))
@@ -435,9 +502,9 @@ def count_and_print_for_golden_writing(log_filename, result_list, timer_prog):
 def count_and_print_for_test_running(log_filename, result_list, timer_prog):
     error_result_count, unique_error_tests = 0, set()
     for result in result_list:
-        if result["ok"] == False:
+        if result["ok"] == False and result["error_is_flaky"] == False:
             error_result_count += 1
-            unique_error_tests.add(result["case_id"])
+            unique_error_tests.add(result["comb_id"])
         print_test_running_result_to_stderr(result, timer_prog)
     return error_result_count, len(unique_error_tests)
 
@@ -449,17 +516,18 @@ class global_lock: # across child processes
     def __exit__(self, etype, value, traceback):
         g_lock.release()
 
+# http://ascii-table.com/ansi-escape-sequences.php
 def add_rotating_log(q, s): # must be protected by a lock: make qsize() reliable
-    for _ in irange(q.qsize()):
-        sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clear entire line
+    temp_arr, original_qsize = [], q.qsize()
     if q.full():
         q.get()
-    temp_arr = []
     while q.qsize() > 0: # empty() is unreliable: nasty Python
         e = q.get()
         temp_arr.append(e)
-        sys.stderr.write(e)
-    sys.stderr.write(s)
+    sys.stderr.write( # cursor moves up and clear entire line
+        "\x1b[1A\x1b[2K" * original_qsize + "\x1b[?25l" # hide cursor
+        + ''.join(temp_arr + [ s ]) + "\x1b[?25h" # show cursor
+    )
     for e in temp_arr:
         q.put(e)
     q.put(s)
@@ -484,26 +552,11 @@ def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
             raise RuntimeError("Internal error (exit %d): %s" % (e.returncode, e.cmd))
     inspectee_stdout_raw, ctimer_stdout = split_ctimer_out(stdout)
     inspectee_stdout = process_inspectee_stdout(inspectee_stdout_raw)
-    run_one_single_result = make_result( # return a dict
+    run_one_single_result = did_run_one( # return a dict
         log_dirname, write_golden, metadata, inspectee_stdout, ctimer_stdout,
         start_abs_time, end_abs_time
     )
-    if metadata["repeat"]["all"] > 1:
-        metadata_desc = "(%d/%d) %s" % (
-            metadata["repeat"]["count"], metadata["repeat"]["all"], metadata["desc"])
-    else:
-        metadata_desc = metadata["desc"]
-    with global_lock():
-        g_count.value += 1
-        if run_one_single_result["ok"] == True:
-            logline = cap_width("\x1b[36mdone\x1b[0m %3s %s" % (g_count.value, metadata_desc)) + '\n'
-            add_rotating_log(g_queue, logline)
-            time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
-        else: # details or error will be printed after all execution
-            logline = cap_width("\x1b[33;1merror\x1b[0m %3s %s" % (g_count.value, metadata_desc)) + '\n'
-            clear_rotating_log(g_queue)
-            sys.stderr.write(logline)
-        sys.stderr.flush()
+    print_one_on_the_fly(metadata, run_one_single_result)
     return run_one_single_result
 
 def run_one(input_args):
@@ -515,19 +568,19 @@ def run_one(input_args):
     }
     return run_one_impl(timer, log_dirname, write_golden, env_values, metadata)
 
-def run_all(args, metadata_list):
+def run_all(args, metadata_list, unique_count):
     remove_prev_log(args)
-    num_tests = len(metadata_list)
-    num_workers = 1 if args.sequential else min(num_tests, NUM_WORKERS_MAX)
-    sys.stderr.write("Running %d tests, worker count: %d ...\n" % (
-        num_tests, num_workers))
+    num_tasks = len(metadata_list) # >= unique_count, because of repeating
+    num_workers = 1 if args.sequential else min(num_tasks, NUM_WORKERS_MAX)
+    sys.stderr.write("Running %d tasks (unique: %d), worker count: %d ...\n" % (
+        num_tasks, unique_count, num_workers))
     start_time = time.time()
     result_list = pool_map(num_workers, run_one, [
         (args.timer, args.log, args.write_golden, metadata) for metadata in metadata_list
     ])
     sys.stderr.write(cap_width("Completed, writing logs ...\r"))
     sys.stderr.flush()
-    error_count, _ = write_master_log(args, num_tests, start_time, result_list)
+    error_count, _ = write_master_log(args, num_tasks, start_time, result_list)
     return 0 if error_count == 0 else 1
 
 NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
@@ -536,7 +589,13 @@ NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
 NEEDED_EXIT_STATUS_OBJECT_FILED = [ # sync with EXPLANATION_STRING's spec
     "type", "repr"
 ]
-def get_matadata_list_format_errors(metadata_list):
+VALID_ARG_SPECIAL_CHARS = "._+-*/=^@#" # sync with EXPLANATION_STRING's spec
+def valid_arg(arg):
+    return all(
+        (c.isalnum() or c in VALID_ARG_SPECIAL_CHARS)
+        for c in arg
+    )
+def check_metadata_list_format(metadata_list): # not comprehensive
     if type(metadata_list) != list:
         return [ "matadata file does not store a JSON array " ]
     errors = []
@@ -547,7 +606,12 @@ def get_matadata_list_format_errors(metadata_list):
         for needed_metadata_field in NEEDED_METADATA_OBJECT_FIELD:
             if needed_metadata_field not in metadata:
                 errors.append("metadata #%d does not contain field \"%s\"" % (
-                    (i + 1), needed_metadata_field))
+                    i + 1, needed_metadata_field))
+        if "args" in metadata:
+            if type(metadata["args"]) != list:
+                errors.append("metadata #%d field \"args\" is not an array" % (i + 1))
+            elif next((e for e in metadata["args"] if (not valid_arg(e))), None) != None:
+                errors.append("metadata #%d field \"args\" contains invalid character" % (i + 1))
         if "exit" in metadata:
             for needed_exit_status_field in NEEDED_EXIT_STATUS_OBJECT_FILED:
                 if needed_exit_status_field not in metadata["exit"]:
@@ -594,7 +658,8 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
         "path"    : string
             path to the test executable
         "args"    : array of strings
-            the commandline arguments
+            the commandline arguments, all characters are alphanumeric or
+            one of "._+-*/=^@#"
         "golden"  : string or null
             path to the golden file (see below); null: not needed
             * if '--write-golden' is given, stdout is written to this file
@@ -603,6 +668,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
         "timeout_ms" : integer or null
             the max processor time (ms); null: effectively infinite
         "exit"    : exit status object (see below), the expected exit status
+        * all paths are relative to the current working directory
 
 \x1b[33m'--paths':\x1b[0m
     Use this option to pass executables' paths is convenient in some use
@@ -613,21 +679,26 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 
 \x1b[33m'--flakiness':\x1b[0m
     Not unusually, some tests are flaky (e.g. due to CPU scheduling or a bug
-    in a language runtime). Use this option to provide a file that documents
-    flakiness suppression. In this file, characters following '#' in a line
-    are ignored, and each non-ignored line is an entry with space-separated
-    string fields in order:
-        - test executable path (last two path components joined with '/')
-        - argument hash string, computed by i) joining args with single blank
-          spaces, and then ii) compute its SHA1 base16 representation (as an
-          exception, all-zeros if there's no argument), then iii) take the
-          first 8 digits
-        - type of expected error: 'exit' for exit status mismatch (including
-          wrong exit code, timeout, signal), 'stdout' for stdout mismatch
-        * joining the first two fields joined with '-' produces the 'case_id'
-          of the corresponding result object in the master log (see below)
-        * example: a line could be "foo/bar-test 00000000 exit", and its
-          'case_id' in the master log is "foo/bar-test-00000000"
+    in language runtime). Use this option to specify a directory that stores
+    all flakiness declaration files. All files whose names match glob pattern
+    *.flaky directly under this directory will be loaded.
+    In a declaration file, characters following '#' in a line are treated as
+    comments. Each non-comment line is a flakiness declaration entry with
+    space-separated string fields in order:
+        1. test executable path (last two path components joined with '/')
+        2. argument hash string computed by i) joining args with single blank
+           spaces, and then ii) compute its SHA1 base16 representation (as an
+           exception, all-zeros if there's no argument), and then iii) take
+           the first 8 digits
+        3. type of expected error: one of more (joined with '|': nonexclusive
+           'or') of WrongExitCode, Timeout, Signal, StdoutDiff, Others
+        * you should ensure the field 1 of each entry is unique across all
+          flakiness declaration files
+        * joining the fields 1 and 2 with '-' produces the 'comb_id' (id for
+          each unique path + args combination) of the corresponding result
+          object in the master log
+        * example: a line could be "foo/bar-test 00000000 Timeout|StdoutDiff"
+          , and its 'comb_id' in the master log is "foo/bar-test-00000000"
 
 \x1b[33m'--write-golden':\x1b[0m
     Use this option to create or overwrite golden files of tests. Tests with
@@ -681,8 +752,10 @@ def main():
                         help="run sequentially instead concurrently")
     parser.add_argument("-s", "--seed", metavar="S", type=int, default=None,
                         help="set the seed for the random number generator")
-    parser.add_argument("-k", "--flakiness", metavar="F", type=str, default=None,
-                        help="flakiness suppression file")
+    # In order to accomodate child projects, allow loading multiple declaration files
+    # in a directory instead of loading one file.
+    parser.add_argument("--flakiness", metavar="DIR", type=str, default=None,
+                        help="load flakiness declaration files *.flaky under DIR")
     parser.add_argument("-w", "--write-golden", action="store_true",
                         help="write stdout to golden files instead of checking")
     parser.add_argument("--docs", action="store_true",
@@ -705,6 +778,8 @@ def main():
         sys.exit("[Error] '--seed' and '--write-golden' cannot be used together.")
     if args.repeat != 1 and args.write_golden:
         sys.exit("[Error] '--repeat' and '--write-golden' cannot be used together.")
+    if args.flakiness and not os.path.isdir(args.flakiness):
+        sys.exit("[Error] directory not found: %s" % args.flakiness)
 
     metadata_list = None
     if len(args.paths):
@@ -720,7 +795,7 @@ def main():
                 metadata_list = json.load(f)
             except ValueError:
                 sys.exit("[Error] not a valid JSON file: %s" % args.meta)
-            errors = get_matadata_list_format_errors(metadata_list) # sanity check
+            errors = check_metadata_list_format(metadata_list) # sanity check
             if errors and len(errors):
                 sys.exit("[Error] metadata is bad, checkout '--docs' for requirements:\n\t" + "\n\t".join(errors))
 
@@ -740,16 +815,25 @@ def main():
 
     if len(metadata_list) == 0:
         sys.exit("[Error] no test found.")
-    metadata_list_with_times = []
+    # here we add more fields to the metadata list:
+    # 1. take care of args.repeat
+    # 2. take care of args.flakiness
+    metadata_list_new = []
+    flakiness_dict = parse_flakiness_decls(args.flakiness)
+    unique_count = len(metadata_list)
     for metadata in metadata_list:
+        # case id is unique for every (path, args) combination
+        comb_id = compute_comb_id(metadata["path"], metadata["args"]) # str
+        metadata["comb_id"] = comb_id # str
+        metadata["flaky_errors"] = flakiness_dict.get(comb_id, []) # list of str
         for i in irange(args.repeat): # if args.repeat != 1, then args.write_golden is False
             metadata_copy = copy.deepcopy(metadata)
             metadata_copy["repeat"] = { "count": i + 1, "all": args.repeat }
-            metadata_list_with_times.append(metadata_copy)
+            metadata_list_new.append(metadata_copy)
     if not args.write_golden:
         random.seed(args.seed) # if args.seed == None, use a system-provided randomness source
-        random.shuffle(metadata_list_with_times)
-    run_all(args, metadata_list_with_times)
+        random.shuffle(metadata_list_new)
+    run_all(args, metadata_list_new, unique_count)
     return 0 # regardless of whether all tests succeeded
 
 if __name__ == "__main__":

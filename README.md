@@ -22,11 +22,12 @@ Run tests in parallel with designated timer.
 - if stdout is not as expected, generates a HTML for the diff
 - program is self-documented
 - print logs in realtime [with multiline rotation](img/multiline-rotation.md)
+- takes flakiness into account
 
 ```sh
 $ ./runtest.py --help
 usage: runtest.py [-h] [--timer TIMER] [--meta PATH] [--paths T [T ...]]
-                  [-g DIR] [-1] [-w] [--docs]
+                  [-g DIR] [-n N] [-1] [-s S] [--flakiness DIR] [-w] [--docs]
 
 Test runner: with timer, logging, diff in HTML
 
@@ -36,7 +37,10 @@ optional arguments:
   --meta PATH         JSON file of tests' metadata
   --paths T [T ...]   paths to test executables
   -g DIR, --log DIR   directory to write logs, default: ./logs
+  -n N, --repeat N    run each test N times, default: 1
   -1, --sequential    run sequentially instead concurrently
+  -s S, --seed S      set the seed for the random number generator
+  --flakiness DIR     load flakiness declaration files *.flaky under DIR
   -w, --write-golden  write stdout to golden files instead of checking
   --docs              self-documentation in more details
 
