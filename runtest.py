@@ -518,25 +518,40 @@ class global_lock: # across child processes
 
 # http://ascii-table.com/ansi-escape-sequences.php
 def add_rotating_log(q, s): # must be protected by a lock: make qsize() reliable
-    temp_arr, original_qsize = [], q.qsize()
-    if q.full():
-        q.get()
-    while q.qsize() > 0: # empty() is unreliable: nasty Python
-        e = q.get()
-        temp_arr.append(e)
-    sys.stderr.write( # cursor moves up and clear entire line
-        "\x1b[1A\x1b[2K" * original_qsize + "\x1b[?25l" # hide cursor
-        + ''.join(temp_arr + [ s ]) + "\x1b[?25h" # show cursor
-    )
-    for e in temp_arr:
-        q.put(e)
-    q.put(s)
+    try:
+        temp_arr, original_qsize = [], q.qsize()
+        if q.full():
+            q.get()
+        while q.qsize() > 0: # empty() is unreliable: nasty Python
+            e = q.get()
+            temp_arr.append(e)
+        sys.stderr.write( # cursor moves up and clear entire line
+            "\x1b[1A\x1b[2K" * original_qsize + "\x1b[?25l" # hide cursor
+            + ''.join(temp_arr + [ s ]) + "\x1b[?25h" # show cursor
+        )
+        for e in temp_arr:
+            q.put(e)
+        q.put(s)
+    # To prevent a broken pipe error. This error is raised when the queue
+    # is garbage-collected by the process that created it, while the current
+    # process still has a thread that wants to access it. We just use the
+    # queue to print logs to console for prettiness, so it is fine to just
+    # ignore the error without compromising the program's correctness.
+    # https://stackoverflow.com/questions/36359528/broken-pipe-error-with-multiprocessing-queue
+    # Python2 uses IOError, but Python3 uses BrokenPipeError which is a
+    # subclass of OSError not IOError (in Python3 IOError is merged into
+    # OSError), and BrokenPipeError does not exist in Python2. Nasty Python.
+    except (IOError, OSError):
+        pass
 
 def clear_rotating_log(q):
-    cur_size = q.qsize()
-    for _ in irange(cur_size):
-        sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clears entire line
-        q.get()
+    try:
+        cur_size = q.qsize()
+        for _ in irange(cur_size):
+            sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clears entire line
+            q.get()
+    except (IOError, OSError): # see reason in add_rotating_log()
+        pass
 
 # used by run_one()
 def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
