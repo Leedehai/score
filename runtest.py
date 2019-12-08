@@ -45,6 +45,19 @@ if (TERMINAL_COLS <= 25):
 # function named differently: nasty python
 irange = range if sys.version_info.major >= 3 else xrange
 
+# handle nasty Python's str v.s. bytes v.s. unicode mess
+def ensure_str(s):
+    if type(s) == str:
+        return s
+    if sys.version_info.major == 2:
+        if type(s) == unicode:
+            return str(s)
+        return s # in Python2, bytes == str
+    elif sys.version_info.major >= 3:
+        if type(s) == bytes:
+            return s.decode()
+        return s # no 'unicode' type in Python3
+
 def guess_emulator_supports_hyperlink():
     if ("SSH_CLIENT" in os.environ) or ("SSH_CONNECTION" in os.environ) or ("SSH_TTY" in os.environ):
         return False
@@ -559,8 +572,8 @@ def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
         try:
             start_abs_time = time.time()
-            stdout = subprocess.check_output(
-                [ timer, metadata["path"] ] + metadata["args"], stderr=devnull, env=env_values).decode().rstrip()
+            stdout = ensure_str(subprocess.check_output(
+                [ timer, metadata["path"] ] + metadata["args"], stderr=devnull, env=env_values)).rstrip()
             end_abs_time = time.time()
         except subprocess.CalledProcessError as e:
             # the code path signals an internal error of the timer program (see '--docs')
@@ -575,7 +588,6 @@ def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
     return run_one_single_result
 
 def run_one(input_args):
-    signal.signal(signal.SIGINT, signal.SIG_IGN) # ignore SIGINT, required by pool_map()
     timer, log_dirname, write_golden, metadata = input_args
     env_values = {
         CTIMER_DELIMITER_ENVKEY : DELIMITER_STR,
@@ -627,6 +639,9 @@ def check_metadata_list_format(metadata_list): # not comprehensive
                 errors.append("metadata #%d field \"args\" is not an array" % (i + 1))
             elif next((e for e in metadata["args"] if (not valid_arg(e))), None) != None:
                 errors.append("metadata #%d field \"args\" contains invalid character" % (i + 1))
+        if "timeout_ms" in metadata:
+            if type(metadata["timeout_ms"]) != int or metadata["timeout_ms"] <= 0:
+                errors.append("metadata #%d field \"timeout_ms\" is not a positive number" % (i + 1))
         if "exit" in metadata:
             for needed_exit_status_field in NEEDED_EXIT_STATUS_OBJECT_FILED:
                 if needed_exit_status_field not in metadata["exit"]:
