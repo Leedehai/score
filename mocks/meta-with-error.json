@@ -6,7 +6,7 @@
         "golden": null,
         "timeout_ms": 1500,
         "exit": {
-            "type": "normal",
+            "type": "return",
             "repr": 0
         }
     },
@@ -17,7 +17,7 @@
         "golden": "mocks/lorem.gold",
         "timeout_ms": 1500,
         "exit": {
-            "type": "normal",
+            "type": "return",
             "repr": 0
         }
     },
@@ -28,7 +28,7 @@
         "golden": "mocks/do_not_create.gold",
         "timeout_ms": 1500,
         "exit": {
-            "type": "normal",
+            "type": "return",
             "repr": 0
         }
     },
@@ -39,7 +39,7 @@
         "golden": "mocks/lorem.gold",
         "timeout_ms": 1500,
         "exit": {
-            "type": "normal",
+            "type": "return",
             "repr": 0
         }
     },
@@ -50,7 +50,7 @@
         "golden": "mocks/lorem.gold",
         "timeout_ms": 1500,
         "exit": {
-            "type": "normal",
+            "type": "return",
             "repr": 0
         }
     }

@@ -45,6 +45,64 @@ if (TERMINAL_COLS <= 25):
 # function named differently: nasty python
 irange = range if sys.version_info.major >= 3 else xrange
 
+# used by did_run_one()
+def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden,
+                         start_abs_time, end_abs_time,
+                         stdout_filename, diff_filename, exceptions):
+    all_ok = match_exit and diff_filename == None
+    golden_filename = os.path.abspath(metadata["golden"]) if metadata["golden"] else None
+    error_is_flaky = None
+    if not all_ok:
+        error_is_flaky = check_if_error_is_flaky(
+            metadata["flaky_errors"], ctimer_reports["exit"]["type"], diff_filename != None)
+    return collections.OrderedDict([
+        # success
+        ("ok", all_ok), # boolean
+        ("error_is_flaky", error_is_flaky), # boolean, or None for all_ok == True
+        # metadata
+        ("desc", metadata["desc"]), # str
+        ("path", metadata["path"]), # str
+        ("args", metadata["args"]), # list
+        ("comb_id", metadata["comb_id"]), # unique for every (path, args) combination
+        ("flaky_errors", metadata["flaky_errors"]), # list of str, the expected errors
+        ("repeat", metadata["repeat"]), # dict { "count": int, "all": int }
+        # time measurements
+        ("timeout_ms", metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME), # int
+        ("times_ms", collections.OrderedDict([
+            ("proc", ctimer_reports["times_ms"]["total"]),
+            ("abs_start", start_abs_time * 1000.0),
+            ("abs_end", end_abs_time * 1000.0),
+        ])),
+        # details:
+        ("exit", collections.OrderedDict([
+            ("ok", match_exit), # boolean: exit type and repr both match with expected
+            # "type"  : string - "return", "timeout", "signal", "quit", "unknown"
+            # "repr"  : integer, indicating the exit code for "return" exit, timeout
+            #     value (millisec, processor time) for "timeout" exit, signal
+            #     value "signal" exit, and null for others (timer errors)
+            ("expected", collections.OrderedDict([
+                ("type", metadata["exit"]["type"]), # str
+                ("repr", metadata["exit"]["repr"])  # int
+            ])),
+            ("real", collections.OrderedDict([
+                ("type", ctimer_reports["exit"]["type"]), # str
+                ("repr", ctimer_reports["exit"]["repr"])  # int
+            ])),
+        ])),
+        ("stdout", collections.OrderedDict([
+            # boolean, or None for '--write-golden' NOTE it is True if there's no need to compare
+            ("ok", None if write_golden else (diff_filename == None)),
+            # abs path (str), or None meaning no need to compare
+            ("golden_file", golden_filename),
+            # abs path (str), or None meaning no stdout or written to golden file
+            ("actual_file", stdout_filename),
+            # abs path (str), or None meaning 1) if "golden_file" == None: no need to compare
+            #                              or 2) if "golden_file" != None: no diff found
+            ("diff_file",   diff_filename) # str, or None if there's no need to compare or no diff found
+        ])),
+        ("exceptions", exceptions) # list of str, describe errors encountered in run_one() (not in test)
+    ]) # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
+
 # handle nasty Python's str v.s. bytes v.s. unicode mess
 def ensure_str(s):
     if type(s) == str:
@@ -122,7 +180,7 @@ def get_metadata_from_path(path):
         "args": [],
         "golden": None,
         "timeout_ms": None,
-        "exit": { "type": "normal", "repr": 0 }
+        "exit": { "type": "return", "repr": 0 }
     }
 
 # run multiprocessing.Pool.map()
@@ -199,22 +257,17 @@ def compute_comb_id(prog, args):
 def get_logfile_path_stem(comb_id, repeat_count, log_dirname): # "stem" means no extension name such as ".diff"
     return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
-# used by print_test_running_result_to_stderr()
-def result_status_field(result, field):
-    return (
-        ("\x1b[31m" if False == result[field]["ok"] else "\x1b[0m")
-        + ("\"%s\": " % field) + str(result[field]["ok"]).lower()
-        + "\x1b[0m"
-    )
-
 UNEXPECTED_ERROR_FORMAT = """\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
-  {error_hint_string}
+{error_summary}
   \x1b[2m{rerun_command}\x1b[0m
 """
 # when not using '--write-golden'
 def print_test_running_result_to_stderr(result, timer):
     timeout_env = "%s=%s" % (CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
-    rerun_command = ' '.join([ timeout_env, timer, '\\\n\t', result["path"] ] + result["args"])
+    rerun_command = "{timeout_env} {timer} \\\n    {path} {args}".format(
+        timeout_env = timeout_env, timer = timer, path = result["path"],
+        args = ' '.join(result["args"])
+    )
     if result["ok"] == True or result["error_is_flaky"] == True:
         pass
     else:
@@ -222,10 +275,12 @@ def print_test_running_result_to_stderr(result, timer):
         result_exceptions = result["exceptions"]
         if len(result_exceptions):
             assert(len(result_exceptions) == 1 and result_exceptions[0] == GOLDEN_FILE_MISSING)
-            error_hint_string = "%s: %s" % (GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
+            error_summary = "%s: %s" % (GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
         else:
-            error_hint_string = "%s, %s" % (
-                result_status_field(result, "exit"), result_status_field(result, "stdout"))
+            error_summary = get_error_summary(result)
+            error_summary = '\n'.join([
+                "  %s: %s" % (k, error_summary[k]) for k in error_summary["error_keys"]
+            ])
         if result["repeat"]["all"] > 1:
             repeat_report = " (repeat %d/%d)" % (result["repeat"]["count"], result["repeat"]["all"])
         else:
@@ -233,7 +288,7 @@ def print_test_running_result_to_stderr(result, timer):
         sys.stderr.write(UNEXPECTED_ERROR_FORMAT.format(
             desc = result["desc"],
             repeat = repeat_report,
-            error_hint_string = error_hint_string,
+            error_summary = error_summary,
             rerun_command = rerun_command
         ))
 
@@ -242,19 +297,22 @@ def print_golden_overwriting_result_to_stderr(result, timer):
     attempted_golden_file = result["stdout"]["golden_file"]
     not_written_exceptions = [ e for e in result["exceptions"] if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX) ]
     timeout_env = "%s=%s" % (CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
-    rerun_command = ' '.join([ timeout_env, timer, '\\\n\t', result["path"] ] + result["args"])
+    rerun_command = "{timeout_env} {timer} \\\n    {path} {args}".format(
+        timeout_env = timeout_env, timer = timer, path = result["path"],
+        args = ' '.join(result["args"])
+    )
     assert(len(not_written_exceptions) <= 1)
     if len(not_written_exceptions) == 0:
-        sys.stderr.write("\x1b[36m[ok: content changed] %s\x1b[0m\n\twritten: %s (%d B)\n\t\x1b[2m%s\x1b[0m\n" % (
+        sys.stderr.write("\x1b[36m[ok: content changed] %s\x1b[0m\n  written: %s (%d B)\n  \x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, os.path.getsize(attempted_golden_file), rerun_command))
         return None
     assert(len(not_written_exceptions) == 1)
     if GOLDEN_NOT_WRITTEN_SAME_CONTENT in not_written_exceptions:
-        sys.stderr.write("\x1b[36m[ok: same content] %s\x1b[0m\n\tskipped: %s\n\t\x1b[2m%s\x1b[0m\n" % (
+        sys.stderr.write("\x1b[36m[ok: same content] %s\x1b[0m\n  skipped: %s\n  \x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, rerun_command))
         return GOLDEN_NOT_WRITTEN_SAME_CONTENT
     elif GOLDEN_NOT_WRITTEN_WRONG_EXIT in not_written_exceptions:
-        sys.stderr.write("\x1b[33m[error: unexpected exit status] %s\x1b[0m\n\tskipped: %s\n\t\x1b[2m%s\x1b[0m\n" % (
+        sys.stderr.write("\x1b[33m[error: unexpected exit status] %s\x1b[0m\n  skipped: %s\n  \x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, rerun_command))
         return GOLDEN_NOT_WRITTEN_WRONG_EXIT # the only one item
     else:
@@ -299,9 +357,9 @@ def process_inspectee_stdout(s):
     return ''.join(new_lines)
 
 # exit type: Sync with EXPLANATION_STRING
-    # "normal", "timeout", "signal", "quit", "unknown"
+    # "return", "timeout", "signal", "quit", "unknown"
 EXIT_TYPE_TO_FLAKINESS_ERR = {
-    "normal":  "WrongExitCode",
+    "return":  "WrongExitCode",
     "timeout": "Timeout",
     "signal":  "Signal",
     "quit":    "Others",
@@ -317,63 +375,22 @@ def check_if_error_is_flaky(expected_errs, actual_exit_type, has_stdout_diff):
         return False
     return EXIT_TYPE_TO_FLAKINESS_ERR[actual_exit_type] in expected_errs
 
-# used by did_run_one()
-def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden,
-                         start_abs_time, end_abs_time,
-                         stdout_filename, diff_filename, exceptions):
-    all_ok = match_exit and diff_filename == None
-    golden_filename = os.path.abspath(metadata["golden"]) if metadata["golden"] else None
-    error_is_flaky = None
-    if not all_ok:
-        error_is_flaky = check_if_error_is_flaky(
-            metadata["flaky_errors"], ctimer_reports["exit"]["type"], diff_filename != None)
-    return collections.OrderedDict([
-        # success
-        ("ok", all_ok), # boolean
-        ("error_is_flaky", error_is_flaky), # boolean, or None for all_ok == True
-        # metadata
-        ("desc", metadata["desc"]), # str
-        ("path", metadata["path"]), # str
-        ("args", metadata["args"]), # list
-        ("comb_id", metadata["comb_id"]), # unique for every (path, args) combination
-        ("flaky_errors", metadata["flaky_errors"]), # list of str, the expected errors
-        ("repeat", metadata["repeat"]), # dict { "count": int, "all": int }
-        # time measurements
-        ("timeout_ms", metadata["timeout_ms"] if metadata["timeout_ms"] != None else INFINITE_TIME), # int
-        ("times_ms", collections.OrderedDict([
-            ("proc", ctimer_reports["times_ms"]["total"]),
-            ("abs_start", start_abs_time * 1000.0),
-            ("abs_end", end_abs_time * 1000.0),
-        ])),
-        # details:
-        ("exit", collections.OrderedDict([
-            ("ok", match_exit), # boolean: exit type and repr both match with expected
-            # "type"  : string - "normal", "timeout", "signal", "quit", "unknown"
-            # "repr"  : integer, indicating the exit code for "normal" exit, timeout
-            #     value (millisec, processor time) for "timeout" exit, signal
-            #     value "signal" exit, and null for others (timer errors)
-            ("expected", collections.OrderedDict([
-                ("type", metadata["exit"]["type"]), # str
-                ("repr", metadata["exit"]["repr"])  # int
-            ])),
-            ("real", collections.OrderedDict([
-                ("type", ctimer_reports["exit"]["type"]), # str
-                ("repr", ctimer_reports["exit"]["repr"])  # int
-            ])),
-        ])),
-        ("stdout", collections.OrderedDict([
-            # boolean, or None for '--write-golden' NOTE it is True if there's no need to compare
-            ("ok", None if write_golden else (diff_filename == None)),
-            # abs path (str), or None meaning no need to compare
-            ("golden_file", golden_filename),
-            # abs path (str), or None meaning no stdout or written to golden file
-            ("actual_file", stdout_filename),
-            # abs path (str), or None meaning 1) if "golden_file" == None: no need to compare
-            #                              or 2) if "golden_file" != None: no diff found
-            ("diff_file",   diff_filename)
-        ])),
-        ("exceptions", exceptions) # list of str, describe errors encountered in run_one() (not in test)
-    ]) # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
+def get_error_summary(result_obj):
+    error_keys = []
+    exit_error = None
+    if result_obj["exit"]["ok"] == False:
+        error_keys.append("exit")
+        # do not use str(dir(..)): have ugly 'u' prefixes for unicode strings
+        real_exit = result_obj["exit"]["real"]
+        exit_error = "{ type: %s, repr: %s }" % (real_exit["type"], real_exit["repr"])
+    diff_file = result_obj["stdout"]["diff_file"]
+    if diff_file != None:
+        error_keys.append("diff")
+    return {
+        "error_keys": error_keys,
+        "exit": exit_error, # str, or None if exit is ok
+        "diff": diff_file   # str, or None if no need to compare or no diff found
+    }
 
 # used by run_one_impl()
 def did_run_one(log_dirname, write_golden, metadata,
@@ -387,7 +404,7 @@ def did_run_one(log_dirname, write_golden, metadata,
     filepath_stem = get_logfile_path_stem( # "stem" means no extension name
         metadata["comb_id"], metadata["repeat"]["count"], log_dirname)
     stdout_filename = None if write_golden else os.path.abspath(filepath_stem + ".stdout")
-    diff_filename = None
+    diff_filename = None # will be given a str if there is need to compare and diff is found
     if not write_golden:
         write_file(stdout_filename, inspectee_stdout) # stdout could be ""
     if metadata["golden"] != None: # write or compare only if "golden" is not None
@@ -445,8 +462,12 @@ def print_one_on_the_fly(metadata, run_one_single_result):
     with global_lock():
         # keep runtime overhead here as simple as possible
         g_count.value += 1
+        error_summary = get_error_summary(run_one_single_result)
         if should_stay_on_console: # definite error, details will be printed after all execution
-            logline = cap_width("%s %3s %s" % (status_head, g_count.value, metadata_desc)) + '\n'
+            logline = "%s %3s %s\n\x1b[2m%s\x1b[0m\n" % (
+                status_head, g_count.value, metadata_desc,
+                '\n'.join([ "  %s: %s" % (k, error_summary[k]) for k in error_summary["error_keys"] ])
+            )
             clear_rotating_log(g_queue)
             sys.stderr.write(logline)
         else: # definite success, flaky success, flaky error
@@ -465,7 +486,7 @@ def remove_prev_log(args):
         sys.exit("[Error] path exists as a non-directory: %s" % args.log)
 
 # used by run_all()
-def write_master_log(args, num_tasks, start_time, result_list):
+def print_summar_and_write_master_log(args, num_tasks, run_tests_start_time, result_list):
     assert(len(result_list) == num_tasks)
     log_filename = os.path.join(args.log, LOG_FILE_BASE)
     if args.write_golden:
@@ -474,21 +495,22 @@ def write_master_log(args, num_tasks, start_time, result_list):
     else:
         error_count, unique_error_count = count_and_print_for_test_running(
             log_filename, result_list, args.timer)
+    assert(unique_error_count <= error_count)
     create_dir_if_needed(args.log)
     with open(log_filename, 'w') as f:
         json.dump(result_list, f, indent=2) # no "sort_keys=True", due to OrderedDict
-    color = "\x1b[32m" if error_count == 0 else "\x1b[31m"
+    color = "\x1b[38;5;155m" if error_count == 0 else "\x1b[38;5;203m"
     sys.stderr.write("%sDone: %s tasks, definite error %d%s, %.2f sec, log: %s\x1b[0m\n" % (
         color, num_tasks,
         error_count,
         "" if error_count == 0 else (" (unique: %d)" % unique_error_count),
-        time.time() - start_time,
+        time.time() - run_tests_start_time,
         hyperlink_str(log_filename)
     ))
     return error_count, unique_error_count
 
-# used by write_master_log(), returns error count and unique error count (but
-# args.repeat == 1 when writing gold, so the two values are the same)
+# used by print_summar_and_write_master_log(), returns error count and unique
+# error count (unique error count <= error count, because of args.repeat)
 def count_and_print_for_golden_writing(log_filename, result_list, timer_prog):
     error_result_count = 0
     golden_written_count = 0
@@ -511,7 +533,7 @@ def count_and_print_for_golden_writing(log_filename, result_list, timer_prog):
         golden_same_content_count, golden_wrong_exit_count))
     return error_result_count, error_result_count
 
-# used by write_master_log(), returns error count and unique error count
+# used by print_summar_and_write_master_log(), returns error count and unique error count
 def count_and_print_for_test_running(log_filename, result_list, timer_prog):
     error_result_count, unique_error_tests = 0, set()
     for result in result_list:
@@ -599,15 +621,16 @@ def run_all(args, metadata_list, unique_count):
     remove_prev_log(args)
     num_tasks = len(metadata_list) # >= unique_count, because of repeating
     num_workers = 1 if args.sequential else min(num_tasks, NUM_WORKERS_MAX)
-    sys.stderr.write("Running %d tasks (unique: %d), worker count: %d ...\n" % (
+    sys.stderr.write("Found %d tasks (unique: %d), worker count: %d ...\n" % (
         num_tasks, unique_count, num_workers))
-    start_time = time.time()
+    run_tests_start_time = time.time()
     result_list = pool_map(num_workers, run_one, [
         (args.timer, args.log, args.write_golden, metadata) for metadata in metadata_list
     ])
     sys.stderr.write(cap_width("Completed, writing logs ...\r"))
     sys.stderr.flush()
-    error_count, _ = write_master_log(args, num_tasks, start_time, result_list)
+    error_count, _ = print_summar_and_write_master_log(
+        args, num_tasks, run_tests_start_time, result_list)
     return 0 if error_count == 0 else 1
 
 NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
@@ -705,7 +728,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     cases, as it doesn't require a metadata file to be prepared ahead of time:
     it's equivalent to setting each test's metadata:
         desc = "", path = (path), args = [], golden = null, timeout_ms = null
-        exit = { "type": "normal", "repr": 0 } (exit status, see below)
+        exit = { "type": "return", "repr": 0 } (exit status, see below)
 
 \x1b[33m'--flakiness':\x1b[0m
     Not unusually, some tests are flaky (e.g. due to CPU scheduling or a bug
@@ -740,9 +763,9 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 
 \x1b[33mExit status object:\x1b[0m
     A JSON object with keys:
-    "type"  : string - "normal", "timeout", "signal", "quit", "unknown"
-    "repr"  : integer, indicating the exit code for "normal" exit, timeout
-              value (millisec, processor time) for "timeout" exit, signal
+    "type"  : string - "return", "timeout", "signal", "quit", "unknown"
+    "repr"  : integer, indicating the exit code for "return" exit, timeout
+              limit (millisec, processor time) for "timeout" exit, signal
               value "signal" exit, and null for others (timer errors)
 
 \x1b[33mMaster log and result object:\x1b[0m

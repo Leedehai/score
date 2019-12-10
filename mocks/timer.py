@@ -58,5 +58,5 @@ else:
         print(INSPECTEE_STDOUT_RAW)
     if len(args) == 2 and args[1] == "--tweak-stdout":
         print(INSPECTEE_STDOUT_RAW_TWEAKED)
-    stats = STATS_JSON % ("normal", 0, 1.01)
+    stats = STATS_JSON % ("return", 0, 1.01)
     print(delimiter + stats + delimiter)
