@@ -15,8 +15,8 @@ if [ $exit_code -ne 0 ]; then
     printf "\033[31;1mexit code is not 0\n\033[0m"
     has_error=1
 fi
-if [ ! -f logs1/run.log ] ; then
-    printf "\033[31;1mmissing: logs1/run.log\n\033[0m"
+if [ ! -f logs1/run_log.json ] ; then
+    printf "\033[31;1mmissing: logs1/run_log.json\n\033[0m"
     has_error=1
 fi
 if [ $(ls logs1/*.stdout | wc -l) -ne 2 ] ; then
@@ -39,8 +39,8 @@ if [ $exit_code -ne 0 ]; then
     printf "\033[31;1mexit code is not 0\n\033[0m"
     has_error=1
 fi
-if [ ! -f logs2/run.log ] ; then
-    printf "\033[31;1mmissing: logs1/run.log\n\033[0m"
+if [ ! -f logs2/run_log.json ] ; then
+    printf "\033[31;1mmissing: logs1/run_log.json\n\033[0m"
     has_error=1
 fi
 if [ $(ls logs2/*.stdout | wc -l) -ne 4 ] ; then
@@ -63,8 +63,8 @@ if [ $exit_code -ne 0 ]; then
     printf "\033[31;1mexit code should be 0\n\033[0m"
     has_error=1
 fi
-if [ ! -f logs2/run.log ] ; then
-    printf "\033[31;1mmissing: logs1/run.log\n\033[0m"
+if [ ! -f logs2/run_log.json ] ; then
+    printf "\033[31;1mmissing: logs1/run_log.json\n\033[0m"
     has_error=1
 fi
 if [ $(ls logs3 | wc -l) -ne 1 ] ; then

@@ -17,7 +17,7 @@ import webbrowser
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
 
-LOG_FILE_BASE      = "run.log"
+LOG_FILE_BASE      = "run_log.json"
 WEBSITE_DIR_BASE   = "web"
 WEBSITE_INDEX_HTML = "index.html"
 

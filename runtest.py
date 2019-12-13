@@ -24,6 +24,7 @@ import shutil
 import signal
 import subprocess
 import time
+
 # custom modules
 from diffhtmlstr import get_diff_html_str
 from flakiness import parse_flakiness_decls
@@ -31,7 +32,7 @@ from flakiness import parse_flakiness_decls
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
 
-LOG_FILE_BASE = "run.log"
+LOG_FILE_BASE = "run_log.json"
 CTIMER_DELIMITER_ENVKEY = "CTIMER_DELIMITER"
 CTIMER_TIMEOUT_ENVKEY = "CTIMER_TIMEOUT"
 DELIMITER_STR = "#####"
@@ -117,7 +118,9 @@ def ensure_str(s):
         return s # no 'unicode' type in Python3
 
 def guess_emulator_supports_hyperlink():
-    if ("SSH_CLIENT" in os.environ) or ("SSH_CONNECTION" in os.environ) or ("SSH_TTY" in os.environ):
+    if (("SSH_CLIENT" in os.environ)
+        or ("SSH_CONNECTION" in os.environ)
+        or ("SSH_TTY" in os.environ)):
         return False
     if platform.system().lower() == "linux":
         return True # VTE terminals (GNOME, Guake, Tilix, ...) are fine
@@ -275,14 +278,16 @@ def print_test_running_result_to_stderr(result, timer):
         result_exceptions = result["exceptions"]
         if len(result_exceptions):
             assert(len(result_exceptions) == 1 and result_exceptions[0] == GOLDEN_FILE_MISSING)
-            error_summary = "%s: %s" % (GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
+            error_summary = "%s: %s" % (
+                GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
         else:
             error_summary = get_error_summary(result)
             error_summary = '\n'.join([
                 "  %s: %s" % (k, error_summary[k]) for k in error_summary["error_keys"]
             ])
         if result["repeat"]["all"] > 1:
-            repeat_report = " (repeat %d/%d)" % (result["repeat"]["count"], result["repeat"]["all"])
+            repeat_report = " (repeat %d/%d)" % (
+                result["repeat"]["count"], result["repeat"]["all"])
         else:
             repeat_report = ""
         sys.stderr.write(UNEXPECTED_ERROR_FORMAT.format(
@@ -303,8 +308,10 @@ def print_golden_overwriting_result_to_stderr(result, timer):
     )
     assert(len(not_written_exceptions) <= 1)
     if len(not_written_exceptions) == 0:
-        sys.stderr.write("\x1b[36m[ok: content changed] %s\x1b[0m\n  written: %s (%d B)\n  \x1b[2m%s\x1b[0m\n" % (
-            result["desc"], attempted_golden_file, os.path.getsize(attempted_golden_file), rerun_command))
+        sys.stderr.write(
+            "\x1b[36m[ok: content changed] %s\x1b[0m\n  written: %s (%d B)\n  \x1b[2m%s\x1b[0m\n" % (
+            result["desc"], attempted_golden_file, os.path.getsize(attempted_golden_file), rerun_command)
+        )
         return None
     assert(len(not_written_exceptions) == 1)
     if GOLDEN_NOT_WRITTEN_SAME_CONTENT in not_written_exceptions:
@@ -778,7 +785,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 \x1b[33mMore on concepts:\x1b[0m
     metadata        (self-evident) description of a test
     golden file     the file storing the expected stdout output
-    master log      a JSON file run.log under the log directory
+    master log      a JSON file run_log.json under the log directory
     log directory   specified by '--log', which stores the master log
                     and tests' stdout and diff, if any, among others
 

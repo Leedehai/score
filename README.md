@@ -59,7 +59,7 @@ sanity/check-runtest.sh
 # run tests that are all good
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1
 # view the log as text file
-vim logs1/run.log
+vim logs1/run_log.json
 # clear up
 rm -rf logs1
 ```
@@ -68,7 +68,7 @@ rm -rf logs1
 # run tests, some of them being bad
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2
 # view the log as text file
-vim logs2/run.log
+vim logs2/run_log.json
 # view the diff files in browser (their paths are found in the log)
 #   on macOS, use 'open' to open files from terminal;
 #   on Linux distributions, however, the most widely installed is 'xdg-open'
