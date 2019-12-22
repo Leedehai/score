@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright: see README and LICENSE under the project root directory.
 # Author: @Leedehai
 #
@@ -9,8 +9,15 @@
 # For help: use '--help' and '--docs'.
 # NOTE all non-help messages are printed to stderr because stderr is
 #      unbuffered by default so it works well with multiprocessing.
+#
+# Migrated from Python2.7; new features not all applied yet.
+# Type hinting does not use the module 'typing', because importing it
+# entails runtime overhead in early releases of Python3.
 
 import os, sys
+py = sys.version_info
+if py.major == 2 or (py.major == 3 and py.minor < 5):
+   sys.exit("[Error] mininum Python version is 3.5")
 import argparse
 import collections
 import copy
@@ -26,7 +33,7 @@ import subprocess
 import time
 
 # custom modules
-from diffhtmlstr import get_diff_html_str
+from diff_html_str import get_diff_html_str
 from flakiness import parse_flakiness_decls
 
 # avoid *.pyc of imported modules
@@ -47,9 +54,11 @@ if (TERMINAL_COLS <= 25):
 irange = range if sys.version_info.major >= 3 else xrange
 
 # used by did_run_one()
-def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden,
-                         start_abs_time, end_abs_time,
-                         stdout_filename, diff_filename, exceptions):
+def generate_result_dict(
+    metadata: dict, ctimer_reports: dict, match_exit: bool, write_golden: bool,
+    start_abs_time: float, end_abs_time: float,
+    stdout_filename: str, diff_filename: str,
+    exceptions: list) -> collections.OrderedDict:
     all_ok = match_exit and diff_filename == None
     golden_filename = os.path.abspath(metadata["golden"]) if metadata["golden"] else None
     error_is_flaky = None
@@ -105,19 +114,14 @@ def generate_result_dict(metadata, ctimer_reports, match_exit, write_golden,
     ]) # NOTE any changes (key, value, meaning) made in this data structure must be honored in view.py
 
 # handle nasty Python's str v.s. bytes v.s. unicode mess
-def ensure_str(s):
-    if type(s) == str:
+def ensure_str(s) -> str:
+    if type(s) == bytes:
+        return s.decode()
+    elif type(s) == str:
         return s
-    if sys.version_info.major == 2:
-        if type(s) == unicode:
-            return str(s)
-        return s # in Python2, bytes == str
-    elif sys.version_info.major >= 3:
-        if type(s) == bytes:
-            return s.decode()
-        return s # no 'unicode' type in Python3
+    raise TypeError("param 's' is not bytes or str")
 
-def guess_emulator_supports_hyperlink():
+def guess_emulator_supports_hyperlink() -> bool:
     if (("SSH_CLIENT" in os.environ)
         or ("SSH_CONNECTION" in os.environ)
         or ("SSH_TTY" in os.environ)):
@@ -134,14 +138,14 @@ def guess_emulator_supports_hyperlink():
 # https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
 # Compatible with GNOME, iTerm2, Guake, hTerm, etc.
 # NOTE the URL should not contain ';' or ':' or ASCII code outside 32-126.
-def hyperlink_str(url, description="link"):
+def hyperlink_str(url: str, description : str = "link") -> str:
     if "://" not in url:
         url = "file://" + os.path.abspath(url)
     if (not IS_ATTY) or (not guess_emulator_supports_hyperlink()):
         return url
     return "\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\" % (url, description)
 
-def get_num_workers(env_var):
+def get_num_workers(env_var: str) -> int:
     env_num_workers = os.environ.get(env_var, "")
     if len(env_num_workers):
         try:
@@ -162,7 +166,7 @@ GOLDEN_NOT_WRITTEN_WRONG_EXIT = "%s: the test's exit is not as expected" % GOLDE
 GOLDEN_FILE_MISSING = "golden file missing"
 
 # Set signal handlers
-def sighandler(sig, frame):
+def sighandler(sig: int, frame):
     # do not print: it's ugly for all workers to print together
     sys.exit(1)
 signal.signal(signal.SIGINT, sighandler)
@@ -170,12 +174,12 @@ signal.signal(signal.SIGTERM, sighandler)
 signal.signal(signal.SIGABRT, sighandler)
 signal.signal(signal.SIGSEGV, sighandler)
 
-def cap_width(s, width=TERMINAL_COLS):
+def cap_width(s: str, width: int = TERMINAL_COLS) -> str:
     extra_space = width - len(s)
     return s if extra_space >= 0 else (s[:12] + "..." + s[len(s) - width - 15:])
 
 # NOTE not a class, due to a flaw in multiprocessing.Pool.map() in Python2
-def get_metadata_from_path(path):
+def get_metadata_from_path(path: str) -> dict:
     # docs: see EXPLANATION_STRING below
     return {
         "desc": "",
@@ -192,7 +196,7 @@ def get_metadata_from_path(path):
 # https://stackoverflow.com/a/6191991/8385554
 # NOTE each 'func' has to ignore SIGINT for the aforementioned fix to work
 # NOTE do not use 'threading' due to GIL (global interpreter lock)
-def pool_map(num_workers, func, inputs):
+def pool_map(num_workers: int, func, inputs: list) -> list:
     def init_shared_mem(lock, queue, count):
         global g_lock
         g_lock = lock
@@ -222,7 +226,7 @@ def pool_map(num_workers, func, inputs):
     pool.join()
     return res
 
-def split_ctimer_out(s):
+def split_ctimer_out(s: str) -> tuple:
     ctimer_begin_index = s.find(DELIMITER_STR)
     if ctimer_begin_index == -1:
         raise RuntimeError("beginning delimiter of ctimer stats not found")
@@ -233,7 +237,7 @@ def split_ctimer_out(s):
     ctimer_stdout = s[ctimer_begin_index + len(DELIMITER_STR) : report_end_index]
     return inspectee_stdout.rstrip(), ctimer_stdout.rstrip()
 
-def get_timeout(timeout):
+def get_timeout(timeout: int) -> str:
     return str(timeout if timeout != None else INFINITE_TIME)
 
 # Pick a hash length
@@ -243,7 +247,7 @@ ARGS_HASH_LEN = 8 # NOTE value should sync with EXPLANATION_STRING below
 # prog = "foo", args = []              => return: "foo-00000000"
 # prog = "baz/bar/foo", args = []      => return: "bar/foo-00000000"
 # prog = "baz/bar/foo", args = [ '9' ] => return: "bar/foo-0ade7c2c"
-def compute_comb_id(prog, args):
+def compute_comb_id(prog: str, args: list) -> str:
     assert(type(args) == list)
     prog_basename = os.path.basename(prog)
     prog_dir_basename = os.path.basename(os.path.dirname(prog)) # "" if prog doesn't contain '/'
@@ -257,7 +261,9 @@ def compute_comb_id(prog, args):
 # comb_id, repeat count, log_dirname. E.g.
 # comb_id = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
 #   => return: "./out/foo/logs/bar/foo-0ade7c2c-3"
-def get_logfile_path_stem(comb_id, repeat_count, log_dirname): # "stem" means no extension name such as ".diff"
+def get_logfile_path_stem(
+    comb_id: str, repeat_count: int,
+    log_dirname: str) -> str: # "stem" means no extension name such as ".diff"
     return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
 UNEXPECTED_ERROR_FORMAT = """\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
@@ -265,7 +271,7 @@ UNEXPECTED_ERROR_FORMAT = """\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
   \x1b[2m{rerun_command}\x1b[0m
 """
 # when not using '--write-golden'
-def print_test_running_result_to_stderr(result, timer):
+def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
     timeout_env = "%s=%s" % (CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
     rerun_command = "{timeout_env} {timer} \\\n    {path} {args}".format(
         timeout_env = timeout_env, timer = timer, path = result["path"],
@@ -298,7 +304,7 @@ def print_test_running_result_to_stderr(result, timer):
         ))
 
 # when using '--write-golden'
-def print_golden_overwriting_result_to_stderr(result, timer):
+def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
     attempted_golden_file = result["stdout"]["golden_file"]
     not_written_exceptions = [ e for e in result["exceptions"] if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX) ]
     timeout_env = "%s=%s" % (CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
@@ -325,7 +331,7 @@ def print_golden_overwriting_result_to_stderr(result, timer):
     else:
         assert(False)
 
-def create_dir_if_needed(dirname):
+def create_dir_if_needed(dirname: str) -> None:
     # NOTE use EAFP (Easier to Ask for Forgiveness than Permission) principle here, i.e.
     # use try-catch to handle the situation where the directory was already created by
     # another process.
@@ -339,7 +345,8 @@ def create_dir_if_needed(dirname):
         pass        # dir already exists (due to multiprocessing)
 
 # can be used concurrently
-def write_file(filename, s, assert_str_non_empty=False):
+def write_file(
+    filename: str, s: str, assert_str_non_empty: bool = False) -> None:
     assert(s != None)
     if assert_str_non_empty:
         assert(s != "")
@@ -347,7 +354,7 @@ def write_file(filename, s, assert_str_non_empty=False):
     with open(filename, 'w') as f:
         f.write(s)
 
-def process_inspectee_stdout(s):
+def process_inspectee_stdout(s: str) -> str:
     # remove color sequences
     s = re.sub(r"\x1b\[.*?m", "", s)
     # do not use textwrap: unstable
@@ -358,14 +365,15 @@ def process_inspectee_stdout(s):
         if c == '\n':
             new_lines.append(cur_line) # ends with '\n'
             cur_line, cnt = "", 0
-        elif cnt == 90: # this limit is used by diff.html and diffhtmlstr.py
+        elif cnt == 90: # this limit is used by diff.html and diff_html_str.py
             new_lines.append(cur_line + '\n') # force linebreak
             cur_line, cnt = "", 0
     return ''.join(new_lines)
 
 # exit type: Sync with EXPLANATION_STRING
-    # "return", "timeout", "signal", "quit", "unknown"
 EXIT_TYPE_TO_FLAKINESS_ERR = {
+    # key: exit type in timer report
+    # val: possible flakiness error type in flakiness declaration file
     "return":  "WrongExitCode",
     "timeout": "Timeout",
     "signal":  "Signal",
@@ -374,7 +382,8 @@ EXIT_TYPE_TO_FLAKINESS_ERR = {
 }
 # used by generate_result_dict()
 # NOTE this function is called ONLY IF there is an error
-def check_if_error_is_flaky(expected_errs, actual_exit_type, has_stdout_diff):
+def check_if_error_is_flaky(
+    expected_errs: list, actual_exit_type: str, has_stdout_diff: bool) -> bool:
     if len(expected_errs) == 0:
         return False
     # NOTE expected_errs might only cover one of the errors
@@ -382,7 +391,7 @@ def check_if_error_is_flaky(expected_errs, actual_exit_type, has_stdout_diff):
         return False
     return EXIT_TYPE_TO_FLAKINESS_ERR[actual_exit_type] in expected_errs
 
-def get_error_summary(result_obj):
+def get_error_summary(result_obj: dict) -> dict:
     error_keys = []
     exit_error = None
     if result_obj["exit"]["ok"] == False:
@@ -400,9 +409,9 @@ def get_error_summary(result_obj):
     }
 
 # used by run_one_impl()
-def did_run_one(log_dirname, write_golden, metadata,
-                inspectee_stdout, ctimer_stdout,
-                start_abs_time, end_abs_time):
+def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
+                inspectee_stdout: str, ctimer_stdout: str,
+                start_abs_time: float, end_abs_time: float) -> collections.OrderedDict:
     assert(len(ctimer_stdout))
     ctimer_dict = json.loads(ctimer_stdout)
     match_exit = (metadata["exit"]["type"] == ctimer_dict["exit"]["type"]
@@ -446,7 +455,7 @@ def did_run_one(log_dirname, write_golden, metadata,
     )
 
 # used by run_one_impl()
-def print_one_on_the_fly(metadata, run_one_single_result):
+def print_one_on_the_fly(metadata: dict, run_one_single_result: dict) -> None:
     # below is printing on the fly
     if metadata["repeat"]["all"] > 1:
         metadata_desc = "%d/%d %s" % (
@@ -484,7 +493,7 @@ def print_one_on_the_fly(metadata, run_one_single_result):
         sys.stderr.flush()
 
 # used by run_all()
-def remove_prev_log(args):
+def remove_prev_log(args: list) -> None:
     if os.path.isdir(args.log):
         # to prevent perplexing cases e.g. master log says all is good, but *.diff files
         # from a previous run exist
@@ -493,7 +502,9 @@ def remove_prev_log(args):
         sys.exit("[Error] path exists as a non-directory: %s" % args.log)
 
 # used by run_all()
-def print_summar_and_write_master_log(args, num_tasks, run_tests_start_time, result_list):
+def print_summar_and_write_master_log(
+    args: list, num_tasks: int,
+    run_tests_start_time: float, result_list: list) -> tuple:
     assert(len(result_list) == num_tasks)
     log_filename = os.path.join(args.log, LOG_FILE_BASE)
     if args.write_golden:
@@ -518,7 +529,8 @@ def print_summar_and_write_master_log(args, num_tasks, run_tests_start_time, res
 
 # used by print_summar_and_write_master_log(), returns error count and unique
 # error count (unique error count <= error count, because of args.repeat)
-def count_and_print_for_golden_writing(log_filename, result_list, timer_prog):
+def count_and_print_for_golden_writing(
+    log_filename: str, result_list: list, timer_prog: str) -> tuple:
     error_result_count = 0
     golden_written_count = 0
     golden_same_content_count, golden_wrong_exit_count = 0, 0
@@ -531,7 +543,7 @@ def count_and_print_for_golden_writing(log_filename, result_list, timer_prog):
             golden_same_content_count += 1
         elif written_or_not == GOLDEN_NOT_WRITTEN_WRONG_EXIT:
             golden_wrong_exit_count += 1
-        elif written_or_not == None:
+        elif not written_or_not:
             golden_written_count += 1
     sys.stderr.write("Golden file writing:\n")
     sys.stderr.write("\t%d written, %d skipped (same content: %d, error: %d)\n" % (
@@ -541,7 +553,8 @@ def count_and_print_for_golden_writing(log_filename, result_list, timer_prog):
     return error_result_count, error_result_count
 
 # used by print_summar_and_write_master_log(), returns error count and unique error count
-def count_and_print_for_test_running(log_filename, result_list, timer_prog):
+def count_and_print_for_test_running(
+    log_filename: str, result_list: list, timer_prog: str) -> tuple:
     error_result_count, unique_error_tests = 0, set()
     for result in result_list:
         if result["ok"] == False and result["error_is_flaky"] == False:
@@ -559,7 +572,8 @@ class global_lock: # across child processes
         g_lock.release()
 
 # http://ascii-table.com/ansi-escape-sequences.php
-def add_rotating_log(q, s): # must be protected by a lock: make qsize() reliable
+# must be protected by a lock: make qsize() reliable
+def add_rotating_log(q, s: str) -> None:
     try:
         temp_arr, original_qsize = [], q.qsize()
         if q.full():
@@ -596,7 +610,9 @@ def clear_rotating_log(q):
         pass
 
 # used by run_one()
-def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
+def run_one_impl(
+    timer: str, log_dirname: str, write_golden: bool,
+    env_values: dict, metadata: dict) -> dict:
     with open(os.devnull, 'w') as devnull:
         # the return code of ctimer is guaranteed to be 0 unless ctimer itself has errors
         try:
@@ -616,7 +632,7 @@ def run_one_impl(timer, log_dirname, write_golden, env_values, metadata):
     print_one_on_the_fly(metadata, run_one_single_result)
     return run_one_single_result
 
-def run_one(input_args):
+def run_one(input_args: list) -> dict:
     timer, log_dirname, write_golden, metadata = input_args
     env_values = {
         CTIMER_DELIMITER_ENVKEY : DELIMITER_STR,
@@ -624,7 +640,7 @@ def run_one(input_args):
     }
     return run_one_impl(timer, log_dirname, write_golden, env_values, metadata)
 
-def run_all(args, metadata_list, unique_count):
+def run_all(args: list, metadata_list: list, unique_count: int) -> int:
     remove_prev_log(args)
     num_tasks = len(metadata_list) # >= unique_count, because of repeating
     num_workers = 1 if args.sequential else min(num_tasks, NUM_WORKERS_MAX)
@@ -647,12 +663,12 @@ NEEDED_EXIT_STATUS_OBJECT_FILED = [ # sync with EXPLANATION_STRING's spec
     "type", "repr"
 ]
 VALID_ARG_SPECIAL_CHARS = "._+-*/=^@#" # sync with EXPLANATION_STRING's spec
-def valid_arg(arg):
+def valid_arg(arg: str) -> bool:
     return all(
         (c.isalnum() or c in VALID_ARG_SPECIAL_CHARS)
         for c in arg
     )
-def check_metadata_list_format(metadata_list): # not comprehensive
+def check_metadata_list_format(metadata_list: list) -> list: # not comprehensive
     if type(metadata_list) != list:
         return [ "matadata file does not store a JSON array " ]
     errors = []
@@ -861,7 +877,7 @@ def main():
 
     if args.write_golden:
         prompt = "About to overwrite golden files of tests with their stdout.\nAre you sure? [y/N] >> "
-        consent = raw_input(prompt) if sys.version_info[0] == 2 else input(prompt)
+        consent = input(prompt)
         if not IS_ATTY:
             print("%s" % consent)
         if consent.lower() == "y":

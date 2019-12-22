@@ -9,9 +9,9 @@
 import sys, os
 import re
 
-EXPECTED_ERRS = [ # Sync with EXPLANATION_STRING in runtest.py
+EXPECTED_ERRS = { # Sync with EXPLANATION_STRING in runtest.py
     "WrongExitCode", "Timeout", "Signal", "StdoutDiff", "Others"
-]
+}
 def _valid_expected_errs(s):
     return all(e in EXPECTED_ERRS for e in s.split('|'))
 

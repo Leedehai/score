@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright: see README and LICENSE under the project root directory.
 # Author: @Leedehai
 #
@@ -7,6 +7,8 @@
 # View the tests from browser.
 # For more information, see README.md.
 # For help: use '--help'.
+#
+# Migrated from Python2.7; new features not all applied yet.
 
 import os, sys
 import argparse
@@ -23,11 +25,14 @@ WEBSITE_INDEX_HTML = "index.html"
 
 def apply_root_to_stdout(root, stdout_dict):
     if stdout_dict["actual_file"] != None:
-        stdout_dict["actual_file"] = os.path.normpath(os.path.join(root, stdout_dict["actual_file"]))
+        stdout_dict["actual_file"] = os.path.normpath(
+            os.path.join(root, stdout_dict["actual_file"]))
     if stdout_dict["golden_file"] != None:
-        stdout_dict["golden_file"] = os.path.normpath(os.path.join(root, stdout_dict["golden_file"]))
+        stdout_dict["golden_file"] = os.path.normpath(
+            os.path.join(root, stdout_dict["golden_file"]))
     if stdout_dict["diff_file"] != None:
-        stdout_dict["diff_file"] = os.path.normpath(os.path.join(root, stdout_dict["diff_file"]))
+        stdout_dict["diff_file"] = os.path.normpath(
+            os.path.join(root, stdout_dict["diff_file"]))
 
 def generate_website(args, logdata_list):
     for logdata in logdata_list:
@@ -37,7 +42,8 @@ def generate_website(args, logdata_list):
     os.makedirs(web_dir)
 	# TODO
     if not args.no_browser:
-        webbrowser.open("file://" + os.path.abspath(os.path.join(web_dir, WEBSITE_INDEX_HTML)))
+        webbrowser.open("file://" + os.path.abspath(
+            os.path.join(web_dir, WEBSITE_INDEX_HTML)))
 
 def main():
     parser = argparse.ArgumentParser(description="View tests in browser",

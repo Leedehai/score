@@ -7,7 +7,7 @@ Utilities to run tests.
 
 ## Prerequsites:
 - Linux or macOS (Windows not tested)
-- Python2.7+ or Python3
+- Python3.5+
 
 ## Files
 
@@ -100,7 +100,7 @@ No third-party libraries needed.
 #### Examples:
 TODO
 
-### [diffhtmlstr.py](diffhtmlstr.py)
+### [diff_html_str.py](diff_html_str.py)
 
 Returns a valid HTML string that contains a table to render the diff view. Used by [runtest.py](runtest.py).
 > The HTML format is [diff.html](diff.html) - the placeholders are `%s` instead of `{slot_name}` because escaping `{` and `}` distorts the CSS definition statements.

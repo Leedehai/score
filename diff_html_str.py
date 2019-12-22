@@ -1,10 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright: see README and LICENSE under the project root directory.
 # Author: @Leedehai
 #
-# File: diffhtmlstr.py
+# File: diff_html_str.py
 # ---------------------------
 # Returns a valid HTML string to render a diff view.
+#
+# Migrated from Python2.7; new features not all applied yet.
 
 import os
 import difflib
@@ -19,11 +21,13 @@ MISSING_EXPECTED_FILE_FORMAT = "<div style='border:solid red 3px; width:80ch; pa
 with open(os.path.join(os.path.dirname(__file__), "diff.html")) as f:
     DIFF_HTML_FORMAT = f.read()
 
-def get_size_str(filename):
+def get_size_str(filename: str) -> str:
     return "%d B" % os.path.getsize(filename)
 
 # return: (golden_file_found, html_string)
-def get_diff_html_str(html_title, desc, command, expected_filename, actual_filename):
+def get_diff_html_str(
+    html_title: str, desc: str, command: str,
+    expected_filename: str, actual_filename: str):
     assert(actual_filename != None and expected_filename != None)
     assert(os.path.isfile(actual_filename))
     found_expected = os.path.isfile(expected_filename)

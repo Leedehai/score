@@ -1,7 +1,6 @@
 # for Travis CI
 language: python
 python:
-  - "2.7"
   - "3.6"
 os:
   # Travis doesn't support testing Python projects on macOS, as of today
