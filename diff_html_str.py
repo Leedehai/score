@@ -11,7 +11,7 @@
 import os
 import difflib
 
-MISSING_EXPECTED_FILE_FORMAT = "<div style='border:solid red 3px; width:80ch; padding:1ch'>\
+MISSING_EXPECTED_FILE_HTML_FORMAT = "<div style='border:solid red 3px; width:80ch; padding:1ch'>\
 <b style='font-size:32px;color:red;text-align:center'>\
 !!!!!! Error: DO NOT COMMIT !!!!!!</b><br>\
 <span style='font-family:Courier;text-align:center;overflow-wrap:break-word'><b>Expected output file missing:</b><br>{filename}</span><br></div><br>"
@@ -26,7 +26,7 @@ def get_size_str(filename: str) -> str:
 
 # return: (golden_file_found, html_string)
 def get_diff_html_str(
-    html_title: str, desc: str, command: str,
+    html_title: str, desc: str, setenv: dict, command: str,
     expected_filename: str, actual_filename: str):
     assert(actual_filename != None and expected_filename != None)
     assert(os.path.isfile(actual_filename))
@@ -34,7 +34,7 @@ def get_diff_html_str(
     expected_lines = list(open(expected_filename, 'r')) if found_expected else []
     actual_lines = list(open(actual_filename, 'r'))
     feed_collection = [
-        html_title, desc, command,
+        html_title, desc, str(setenv), command,
         get_size_str(expected_filename) if found_expected else "not found",
         os.path.abspath(expected_filename), expected_filename,
         get_size_str(actual_filename),
@@ -46,7 +46,7 @@ def get_diff_html_str(
     if not found_expected:
         # do not raise RuntimeError, because this is user's input error
         return False, DIFF_HTML_FORMAT % tuple(feed_collection + [
-             MISSING_EXPECTED_FILE_FORMAT.format(filename=expected_filename)
+             MISSING_EXPECTED_FILE_HTML_FORMAT.format(filename=expected_filename)
              + diff_str_as_html_table
         ]) # missing golden file, diff str
     if actual_lines == expected_lines:

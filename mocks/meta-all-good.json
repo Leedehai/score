@@ -5,6 +5,7 @@
         "args": [],
         "golden": null,
         "timeout_ms": 1500,
+        "setenv": { "ENV_VAR": "1" },
         "exit": {
             "type": "return",
             "repr": 0
@@ -16,6 +17,7 @@
         "args": [ "--print" ],
         "golden": "mocks/lorem.gold",
         "timeout_ms": 1500,
+        "setenv": { "ENV_VAR": "1" },
         "exit": {
             "type": "return",
             "repr": 0

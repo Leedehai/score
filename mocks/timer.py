@@ -44,6 +44,9 @@ STATS_JSON = """{
     }
 }"""
 
+env_var = os.environ.get("ENV_VAR", None)
+assert(env_var and env_var == "1")
+
 args = sys.argv[1:]
 assert(len(args) >= 1)
 if args[0] == "timeout.exe":
