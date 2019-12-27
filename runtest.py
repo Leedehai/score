@@ -39,7 +39,7 @@ from flakiness import parse_flakiness_decls
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
 
-LOG_FILE_BASE = "run_log.json"
+LOG_FILE_BASE = "log.json"
 CTIMER_DELIMITER_ENVKEY = "CTIMER_DELIMITER"
 CTIMER_TIMEOUT_ENVKEY = "CTIMER_TIMEOUT"
 DELIMITER_STR = "#####"
@@ -142,10 +142,9 @@ def guess_emulator_supports_hyperlink() -> bool:
 # Compatible with GNOME, iTerm2, Guake, hTerm, etc.
 # NOTE the URL should not contain ';' or ':' or ASCII code outside 32-126.
 def hyperlink_str(url: str, description : str = "link") -> str:
-    if "://" not in url:
-        url = "file://" + os.path.abspath(url)
     if (not IS_ATTY) or (not guess_emulator_supports_hyperlink()):
         return url
+    url = url if "://" in url else ("file://" + os.path.abspath(url))
     return "\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\" % (url, description)
 
 def get_num_workers(env_var: str) -> int:
@@ -159,7 +158,7 @@ def get_num_workers(env_var: str) -> int:
             sys.exit("[Error] env variable '%s' is not positive" % env_var)
         return env_num_workers_number
     else:
-        return multiprocessing.cpu_count() + 2
+        return multiprocessing.cpu_count()
 NUM_WORKERS_MAX = get_num_workers(env_var="NUM_WORKERS") # not "NUM_WORKERS_MAX", to be consistent
 
 # possible exceptions (not Python's Exceptions) for user inputs
@@ -190,7 +189,7 @@ def get_metadata_from_path(path: str) -> dict:
         "args": [],
         "golden": None,
         "timeout_ms": None,
-        "setenv": {},
+        "setenv": None,
         "exit": { "type": "return", "repr": 0 }
     }
 
@@ -539,13 +538,15 @@ def print_summar_and_write_master_log(
     create_dir_if_needed(args.log)
     with open(log_filename, 'w') as f:
         json.dump(result_list, f, indent=2) # no "sort_keys=True", due to OrderedDict
-    color = "\x1b[38;5;155m" if error_count == 0 else "\x1b[38;5;203m"
-    sys.stderr.write("%sDone: %s tasks, definite error %d%s, %.2f sec, log: %s\x1b[0m\n" % (
-        color, num_tasks,
-        error_count,
-        "" if error_count == 0 else (" (unique: %d)" % unique_error_count),
+    color = "\x1b[32m" if error_count == 0 else "\x1b[38;5;203m"
+    sys.stderr.write("%s%s Tasks %s, %s, %.2f sec, log: %s\x1b[0m\n" % (
+        color,
+        "[Success]" if error_count == 0 else "[Error]",
+        num_tasks,
+        "all passed" if error_count == 0 else (
+            " definite error %d (unique: %d)" % (error_count, unique_error_count)),
         time.time() - run_tests_start_time,
-        hyperlink_str(log_filename)
+        hyperlink_str(os.path.relpath(log_filename), description = LOG_FILE_BASE)
     ))
     return error_count, unique_error_count
 
@@ -664,14 +665,15 @@ def run_one(input_args: list) -> dict:
         CTIMER_DELIMITER_ENVKEY : DELIMITER_STR,
         CTIMER_TIMEOUT_ENVKEY   : get_timeout(metadata["timeout_ms"])
     }
-    env_values.update(metadata["setenv"])
+    if metadata["setenv"] != None:
+        env_values.update(metadata["setenv"])
     return run_one_impl(timer, log_dirname, write_golden, env_values, metadata)
 
 def run_all(args: list, metadata_list: list, unique_count: int) -> int:
     remove_prev_log(args.log)
     num_tasks = len(metadata_list) # >= unique_count, because of repeating
     num_workers = 1 if args.sequential else min(num_tasks, NUM_WORKERS_MAX)
-    sys.stderr.write("Found %d tasks (unique: %d), worker count: %d ...\n" % (
+    sys.stderr.write("Execute %d tasks (unique: %d), worker count: %d ...\n" % (
         num_tasks, unique_count, num_workers))
     run_tests_start_time = time.time()
     result_list = pool_map(num_workers, run_one, [
@@ -719,21 +721,27 @@ def check_metadata_list_format(metadata_list: list) -> list: # not comprehensive
                               "invalid character" % (i + 1))
         if "timeout_ms" in metadata:
             timeout_ms = metadata["timeout_ms"]
-            if type(timeout_ms) != int or timeout_ms <= 0:
-                errors.append("metadata #%-2d field \"timeout_ms\" "
-                              "is not a positive number" % (i + 1))
+            if timeout_ms == None:
+                pass
+            else:
+                if type(timeout_ms) != int or timeout_ms <= 0:
+                    errors.append("metadata #%-2d field \"timeout_ms\" "
+                                "is not a positive number" % (i + 1))
         if "setenv" in metadata:
             setenv = metadata["setenv"]
-            if type(metadata["setenv"]) != dict:
-                errors.append(
-                    "metadata #%-2d field \"setenv\" is not a dict" % (i + 1))
+            if setenv == None:
+                pass
             else:
-                if any((type(k) != str) or ' ' in k for k in setenv.keys()):
-                    errors.append("metadata #%-2d field \"setenv\" requires "
-                                  "keys to be strings without spaces" % (i + 1))
-                if any((type(v) != str) or ' ' in v for v in setenv.values()):
-                    errors.append("metadata #%-2d field \"setenv\" requires "
-                                  "values to be strings without spaces" % (i + 1))
+                if type(metadata["setenv"]) != dict:
+                    errors.append(
+                        "metadata #%-2d field \"setenv\" is not a dict" % (i + 1))
+                else:
+                    if any((type(k) != str) or ' ' in k for k in setenv.keys()):
+                        errors.append("metadata #%-2d field \"setenv\" requires "
+                                    "keys to be strings without spaces" % (i + 1))
+                    if any((type(v) != str) or ' ' in v for v in setenv.values()):
+                        errors.append("metadata #%-2d field \"setenv\" requires "
+                                    "values to be strings without spaces" % (i + 1))
         if "exit" in metadata:
             for needed_exit_status_field in NEEDED_EXIT_STATUS_OBJECT_FILED:
                 if needed_exit_status_field not in metadata["exit"]:
@@ -793,7 +801,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
               file, to avoid race condition when '--write-golden' is given
         "timeout_ms" : integer or null
             the max processor time (ms); null: effectively infinite
-        "setenv"  : dict
+        "setenv"  : dict or null
             environment variables provided when running the test executable
             * each entry's key and value are strings without spaces
         "exit"    : exit status object (see below), the expected exit status
@@ -806,7 +814,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     test executable paths in commandline. Other fields required by a metadata
     object (see above) of each test will automatically get these values:
         desc = "", path = (the path provided with this option),
-        args = [], golden = null, timeout_ms = null, setenv = {},
+        args = [], golden = null, timeout_ms = null, setenv = null,
         exit = { "type": "return", "repr": 0 } (exit status, see below)
     * mutually exclusive: --meta, --paths
 
@@ -841,6 +849,29 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     expected, and if the file exists, the content will be different.
     You have to manually check the tests are correct before writing.
 
+\x1b[33m'--only':\x1b[0m
+    Use this option to run a subset of tests. The tests are marked by their
+    indexes in the list of tests provided by '--meta' or '--paths'.
+    The argument to the option is a comma-separated selectors:
+        '+' to add all, '-' to remove all, '+n' to add, '-n' to remove
+    * the index n starts at 0, then 1, 2, ..
+    * before adding or removing, the initial list is empty.
+    * a number 'n' without an +/- prefix is treated as '+n'.
+    * if the first character of the argument is '-', you should use the
+      escape sequence '\\-' instead, otherwise your terminal may treat it as
+      a commandline option.
+    For examples:
+        --only "+"               add all tests
+        --only "+5"              only add index 5
+        --only "5,6"             only add indexes 5 and 6
+        --only "+5,+6"           only add indexes 5 and 6
+        --only "+,-5"            add all, except index 5
+        --only "+,-5,-6"         add all, except indexes 5 and 6
+        --only "+5,+"            same as "+"
+        --only "+5,-,+6"         same as "+6"
+        --only "\\-,+5"           same as "+5"
+        --only "\\-,+5,-5,+6"     same as "+6"
+
 \x1b[33mExit status object:\x1b[0m
     A JSON object with keys:
     "type"  : string - "return", "timeout", "signal", "quit", "unknown"
@@ -858,11 +889,12 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 \x1b[33mMore on concepts:\x1b[0m
     metadata        (self-evident) description of a test
     golden file     the file storing the expected stdout output
-    master log      a JSON file run_log.json under the log directory
+    master log      a JSON file log.json under the log directory
     log directory   specified by '--log', which stores the master log
                     and tests' stdout and diff, if any, among others
 
 \x1b[33mMore on options:\x1b[0m
+    Complete list of options: "--help".
     Concurrency is enabled, unless '--sequential' is given.
     Unless '--help' or '--docs' is given:
         * '--timer' is needed, and
@@ -894,6 +926,8 @@ def main():
                         help="load flakiness declaration files *.flaky under DIR")
     parser.add_argument("-w", "--write-golden", action="store_true",
                         help="write stdout to golden files instead of checking")
+    parser.add_argument("--only", metavar="\"+0,-1,+5..\"", type=str, default="",
+                        help="only run the selected tests (grammar in '--docs')")
     parser.add_argument("--docs", action="store_true",
                         help="self-documentation in more details")
     args = parser.parse_args()
@@ -939,31 +973,84 @@ def main():
     else: # Should not reach here; already checked by option filtering above
         raise RuntimeError("Should not reach here")
 
-    if args.write_golden:
+    if len(metadata_list) == 0:
+        sys.exit("[Error] no test found.")
+
+    # now we parse the "--only" option and add/remove tests from metadata_list;
+    # this step produces metadata_list_2
+    if not args.only:
+        metadata_list_2 = metadata_list
+    if len(args.only):
+        selectors = [ part for part in args.only.split(",") if len(part) ]
+        selected_indexes = set()
+        has_selector_error = False
+        for selector in selectors:
+            if selector.startswith("\\-"):
+                selector = selector[1:]
+            elif selector.isdigit():
+                selector = '+%s' % selector
+            # parse the selector
+            if selector == '+':
+                selected_indexes = set(range(len(metadata_list)))
+            elif selector == '-':
+                selected_indexes.clear()
+            elif selector[1:].isdigit():
+                target_index = int(selector[1:])
+                if not (0 <= target_index < len(metadata_list)):
+                    has_selector_error = True
+                    break
+                if selector.startswith('+'):
+                    if target_index in selected_indexes:
+                        sys.exit("[Index] index %d was already selected, "
+                                 "unable to add it" % target_index)
+                    selected_indexes.add(target_index)
+                elif selector.startswith('-') and selector[1:].isdigit():
+                    if target_index not in selected_indexes:
+                        sys.exit("[Index] index %d was not selected, "
+                                 "unable to remove it" % target_index)
+                    selected_indexes.remove(target_index)
+                else:
+                    has_selector_error = True
+                    break
+            else:
+                has_selector_error = True
+                break
+        if has_selector_error:
+            sys.exit("[Error] selector string invalid or index "
+                     "out of range: \"%s\", see '--docs'" % args.only)
+        if len(selected_indexes) == 0:
+            sys.exit("[Error] no test selected.")
+        metadata_list_2 = [ metadata_list[i] for i in selected_indexes ]
+
+    # if args.write_golden == True, we ignore tests that do not have a golden file;
+    # this step produces metadata_list_3
+    if not args.write_golden:
+        metadata_list_3 = metadata_list_2
+    else:
         prompt = ("About to overwrite golden files of tests with their stdout.\n"
                   "Are you sure? [y/N] >> ")
         consent = input(prompt)
         if not IS_ATTY:
             print("%s" % consent)
         if consent.lower() == "y":
-            old_metadata_list_len = len(metadata_list)
-            metadata_list = [ m for m in metadata_list if m["golden"] != None ]
-            ignored_tests_count = old_metadata_list_len - len(metadata_list)
+            metadata_list_3 = [ m for m in metadata_list_2 if m["golden"] != None ]
+            ignored_tests_count = len(metadata_list_2) - len(metadata_list_3)
             if ignored_tests_count > 0:
                 print("[Info] tests with no golden file specified "
                       "are ignored: %d" % ignored_tests_count)
         else:
             sys.exit("Aborted.")
+    if len(metadata_list_3) == 0:
+        print("No golden file to write")
+        sys.exit(0)
 
-    if len(metadata_list) == 0:
-        sys.exit("[Error] no test found.")
-    # here we add more fields to the metadata list:
+    # here we add more fields to the metadata list; this step produces metadata_list_4
     # 1. take care of args.repeat
     # 2. take care of args.flakiness
-    metadata_list_new = []
+    metadata_list_4 = []
     flakiness_dict = parse_flakiness_decls(args.flakiness)
-    unique_count = len(metadata_list)
-    for metadata in metadata_list:
+    unique_count = len(metadata_list_3)
+    for metadata in metadata_list_3:
         # case id is unique for every (path, args) combination
         comb_id = compute_comb_id(metadata["path"], metadata["args"]) # str
         metadata["comb_id"] = comb_id # str
@@ -971,11 +1058,15 @@ def main():
         for i in irange(args.repeat): # if args.repeat != 1, then args.write_golden is False
             metadata_copy = copy.deepcopy(metadata)
             metadata_copy["repeat"] = { "count": i + 1, "all": args.repeat }
-            metadata_list_new.append(metadata_copy)
+            metadata_list_4.append(metadata_copy)
+
+    # here we shuffle the tests
     if not args.write_golden:
         random.seed(args.seed) # if args.seed == None, use a system-provided randomness source
-        random.shuffle(metadata_list_new)
-    run_all(args, metadata_list_new, unique_count)
+        random.shuffle(metadata_list_4)
+
+    # run the tests
+    run_all(args, metadata_list_4, unique_count)
     return 0 # regardless of whether all tests succeeded
 
 if __name__ == "__main__":
