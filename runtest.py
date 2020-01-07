@@ -30,6 +30,7 @@ import re
 import shutil
 import signal
 import subprocess
+import textwrap
 import time
 
 # custom modules
@@ -49,9 +50,6 @@ IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty() # testing might not be in a
 TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY else 70
 if (TERMINAL_COLS <= 25):
     sys.exit("[Error] terminal width (%d) is rediculously small" % TERMINAL_COLS)
-
-# function named differently: nasty python
-irange = range if sys.version_info.major >= 3 else xrange
 
 # used by did_run_one()
 def generate_result_dict(
@@ -76,6 +74,7 @@ def generate_result_dict(
         ("desc", metadata["desc"]), # str
         ("path", metadata["path"]), # str
         ("args", metadata["args"]), # list
+        ("setenv", metadata["setenv"]), # dict or None
         ("comb_id", metadata["comb_id"]), # unique for every (path, args) combination
         ("flaky_errors", metadata["flaky_errors"]), # list of str, the expected errors
         ("repeat", metadata["repeat"]), # dict { "count": int, "all": int }
@@ -269,18 +268,34 @@ def get_logfile_path_stem(
     log_dirname: str) -> str: # "stem" means no extension name such as ".diff"
     return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
-UNEXPECTED_ERROR_FORMAT = """\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
+def make_command_invokation_str(
+    timer_path: str, result: dict, indent: int = 0) -> str:
+    strs = []
+    if result["setenv"] != None:
+        strs += [
+            "{0}{1}={2}".format(' ' * indent, k, v)
+            for k, v in result["setenv"].items()
+        ]
+    strs.append("{0}{1}={2} {3}".format(
+        ' ' * indent, CTIMER_TIMEOUT_ENVKEY,
+        get_timeout(result["timeout_ms"]), timer_path
+    ))
+    strs += textwrap.wrap(
+        text = "%s %s" % (result["path"], ' '.join(result["args"])),
+        width = 70,
+        initial_indent = ' ' * (2 * indent),
+        subsequent_indent = ' ' * (3 * indent),
+        break_long_words = False, break_on_hyphens = False,
+    )
+    return " \\\n".join(strs)
+
+UNEXPECTED_ERROR_FORMAT = """\n\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
 {error_summary}
-  \x1b[2m{rerun_command}\x1b[0m
+\x1b[2m{rerun_command}\x1b[0m
 """
 # when not using '--write-golden'
 def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
-    timeout_env = "%s=%s" % (
-        CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
-    rerun_command = "{timeout_env} {timer} \\\n    {path} {args}".format(
-        timeout_env = timeout_env, timer = timer, path = result["path"],
-        args = ' '.join(result["args"])
-    )
+    rerun_command = make_command_invokation_str(timer, result, indent = 2)
     if result["ok"] == True or result["error_is_flaky"] == True:
         pass
     else:
@@ -294,8 +309,7 @@ def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
         else:
             error_summary = get_error_summary(result)
             error_summary = '\n'.join([
-                "  %s: %s" % (k, error_summary[k])
-                for k in error_summary["error_keys"]
+                "  %s: %s" % (k, v) for k, v in error_summary.items() if v != None
             ])
         if result["repeat"]["all"] > 1:
             repeat_report = " (repeat %d/%d)" % (
@@ -316,17 +330,12 @@ def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
         e for e in result["exceptions"]
         if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX)
     ]
-    timeout_env = "%s=%s" % (
-        CTIMER_TIMEOUT_ENVKEY, get_timeout(result["timeout_ms"]))
-    rerun_command = "{timeout_env} {timer} \\\n    {path} {args}".format(
-        timeout_env = timeout_env, timer = timer, path = result["path"],
-        args = ' '.join(result["args"])
-    )
+    rerun_command = make_command_invokation_str(timer, result, indent = 2)
     assert(len(not_written_exceptions) <= 1)
     if len(not_written_exceptions) == 0:
         sys.stderr.write(
-            "\x1b[36m[ok: content changed] %s\x1b[0m\n"
-            "  written: %s (%d B)\n  \x1b[2m%s\x1b[0m\n" % (
+            "\n\x1b[36m[ok: content changed] %s\x1b[0m\n"
+            "  written: %s (%d B)\n\x1b[2m%s\x1b[0m\n" % (
                 result["desc"], attempted_golden_file,
                 os.path.getsize(attempted_golden_file), rerun_command
         ))
@@ -334,14 +343,14 @@ def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
     assert(len(not_written_exceptions) == 1)
     if GOLDEN_NOT_WRITTEN_SAME_CONTENT in not_written_exceptions:
         sys.stderr.write(
-            "\x1b[36m[ok: same content] %s\x1b[0m\n"
-            "  skipped: %s\n  \x1b[2m%s\x1b[0m\n" % (
+            "\n\x1b[36m[ok: same content] %s\x1b[0m\n"
+            "  skipped: %s\n\x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, rerun_command))
         return GOLDEN_NOT_WRITTEN_SAME_CONTENT
     elif GOLDEN_NOT_WRITTEN_WRONG_EXIT in not_written_exceptions:
         sys.stderr.write(
-            "\x1b[33m[error: unexpected exit status] %s\x1b[0m\n"
-            "  skipped: %s\n  \x1b[2m%s\x1b[0m\n" % (
+            "\n\x1b[33m[error: unexpected exit status] %s\x1b[0m\n"
+            "  skipped: %s\n\x1b[2m%s\x1b[0m\n" % (
             result["desc"], attempted_golden_file, rerun_command))
         return GOLDEN_NOT_WRITTEN_WRONG_EXIT # the only one item
     else:
@@ -408,20 +417,21 @@ def check_if_error_is_flaky(
     return EXIT_TYPE_TO_FLAKINESS_ERR[actual_exit_type] in expected_errs
 
 def get_error_summary(result_obj: dict) -> dict:
-    error_keys = []
-    exit_error = None
     if result_obj["exit"]["ok"] == False:
-        error_keys.append("exit")
         # do not use str(dir(..)): have ugly 'u' prefixes for unicode strings
         real_exit = result_obj["exit"]["real"]
         exit_error = "{ type: %s, repr: %s }" % (real_exit["type"], real_exit["repr"])
+    else:
+        exit_error = None
     diff_file = result_obj["stdout"]["diff_file"]
     if diff_file != None:
-        error_keys.append("diff")
+        diff_file_hyperlink = hyperlink_str(
+            diff_file, description = os.path.basename(diff_file))
+    else:
+        diff_file_hyperlink = None
     return {
-        "error_keys": error_keys,
         "exit": exit_error, # str, or None if exit is ok
-        "diff": diff_file   # str, or None if no need to compare or no diff found
+        "diff": diff_file_hyperlink, # str, or None if no need to compare or no diff found
     }
 
 # used by run_one_impl()
@@ -455,10 +465,12 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
                 exceptions.append(GOLDEN_NOT_WRITTEN_WRONG_EXIT)
         else: # compare stdout with golden
             found_golden, stdout_comparison_diff = get_diff_html_str(
-                filepath_stem.split(os.sep)[-1], # title of HTML
-                metadata["desc"], metadata["setenv"],
-                ' '.join([ metadata["path"] ] + metadata["args"]),
-                golden_filename, stdout_filename
+                html_title = filepath_stem.split(os.sep)[-1],
+                desc = metadata["desc"],
+                setenv = metadata["setenv"] if metadata["setenv"] else {},
+                command = ' '.join([ metadata["path"] ] + metadata["args"]),
+                expected_filename = golden_filename,
+                actual_filename = stdout_filename,
             )
             if not found_golden:
                 exceptions.append(GOLDEN_FILE_MISSING)
@@ -493,15 +505,14 @@ def print_one_on_the_fly(metadata: dict, run_one_single_result: dict) -> None:
             should_stay_on_console = True
             status_head = "\x1b[33;1merror\x1b[0m"
     with global_lock():
-        # keep runtime overhead here as simple as possible
+        # keep runtime overhead here as small as possible
         g_count.value += 1
         error_summary = get_error_summary(run_one_single_result)
         if should_stay_on_console: # definite error, details will be printed after all execution
             logline = "%s %3s %s\n\x1b[2m%s\x1b[0m\n" % (
                 status_head, g_count.value, metadata_desc,
                 '\n'.join([
-                    "  %s: %s" % (k, error_summary[k])
-                    for k in error_summary["error_keys"]
+                    "  %s: %s" % (k, v) for k, v in error_summary.items() if v != None
                 ])
             )
             clear_rotating_log(g_queue)
@@ -523,37 +534,32 @@ def remove_prev_log(log_dir: str) -> None:
         sys.exit("[Error] path exists as a non-directory: %s" % log_dir)
 
 # used by run_all()
-def print_summar_and_write_master_log(
-    args: list, num_tasks: int,
-    run_tests_start_time: float, result_list: list) -> tuple:
+def print_post_processing_summary(
+    args: list, num_tasks: int, result_list: list, master_log_filepath: str) -> tuple:
     assert(len(result_list) == num_tasks)
-    log_filename = os.path.join(args.log, LOG_FILE_BASE)
     if args.write_golden:
         error_count, unique_error_count = count_and_print_for_golden_writing(
-            log_filename, result_list, args.timer)
+            result_list, args.timer)
     else:
         error_count, unique_error_count = count_and_print_for_test_running(
-            log_filename, result_list, args.timer)
+            result_list, args.timer)
     assert(unique_error_count <= error_count)
-    create_dir_if_needed(args.log)
-    with open(log_filename, 'w') as f:
-        json.dump(result_list, f, indent=2) # no "sort_keys=True", due to OrderedDict
     color = "\x1b[32m" if error_count == 0 else "\x1b[38;5;203m"
-    sys.stderr.write("%s%s Tasks %s, %s, %.2f sec, log: %s\x1b[0m\n" % (
+    sys.stderr.write("%s%s Tasks %s, %s, log: %s\x1b[0m\n" % (
         color,
         "[Success]" if error_count == 0 else "[Error]",
         num_tasks,
         "all passed" if error_count == 0 else (
-            " definite error %d (unique: %d)" % (error_count, unique_error_count)),
-        time.time() - run_tests_start_time,
-        hyperlink_str(os.path.relpath(log_filename), description = LOG_FILE_BASE)
+            "unexpected error {err} (unique: {unique_err})".format(
+                err = error_count, unique_err = unique_error_count)),
+        hyperlink_str(os.path.relpath(
+            master_log_filepath), description = LOG_FILE_BASE)
     ))
     return error_count, unique_error_count
 
-# used by print_summar_and_write_master_log(), returns error count and unique
+# used by print_post_processing_summary(), returns error count and unique
 # error count (unique error count <= error count, because of args.repeat)
-def count_and_print_for_golden_writing(
-    log_filename: str, result_list: list, timer_prog: str) -> tuple:
+def count_and_print_for_golden_writing(result_list: list, timer_prog: str) -> tuple:
     error_result_count = 0
     golden_written_count = 0
     golden_same_content_count, golden_wrong_exit_count = 0, 0
@@ -575,9 +581,8 @@ def count_and_print_for_golden_writing(
         golden_same_content_count, golden_wrong_exit_count))
     return error_result_count, error_result_count
 
-# used by print_summar_and_write_master_log(), returns error count and unique error count
-def count_and_print_for_test_running(
-    log_filename: str, result_list: list, timer_prog: str) -> tuple:
+# used by print_post_processing_summary(), returns error count and unique error count
+def count_and_print_for_test_running(result_list: list, timer_prog: str) -> tuple:
     error_result_count, unique_error_tests = 0, set()
     for result in result_list:
         if result["ok"] == False and result["error_is_flaky"] == False:
@@ -626,7 +631,7 @@ def add_rotating_log(q, s: str) -> None:
 def clear_rotating_log(q):
     try:
         cur_size = q.qsize()
-        for _ in irange(cur_size):
+        for _ in range(cur_size):
             sys.stderr.write("\x1b[1A\x1b[2K") # cursor moves up and clears entire line
             q.get()
     except (IOError, OSError): # see reason in add_rotating_log()
@@ -636,19 +641,18 @@ def clear_rotating_log(q):
 def run_one_impl(
     timer: str, log_dirname: str, write_golden: bool,
     env_values: dict, metadata: dict) -> dict:
-    with open(os.devnull, 'w') as devnull:
-        # the return code of the timer program is guaranteed to be 0
-        # unless the timer itself has errors
-        try:
-            start_abs_time = time.time()
-            stdout = ensure_str(subprocess.check_output(
-                [ timer, metadata["path"] ] + metadata["args"],
-                stderr=devnull, env=env_values)).rstrip()
-            end_abs_time = time.time()
-        except subprocess.CalledProcessError as e:
-            # the code path signals an internal error of the timer program (see '--docs')
-            raise RuntimeError(
-                "Internal error (exit %d): %s" % (e.returncode, e.cmd))
+    # The return code of the timer program is guaranteed to be 0
+    # unless the timer itself has errors.
+    try:
+        start_abs_time = time.time()
+        stdout = ensure_str(subprocess.check_output(
+            [ timer, metadata["path"] ] + metadata["args"],
+            stderr = subprocess.DEVNULL, env = env_values)).rstrip()
+        end_abs_time = time.time()
+    except subprocess.CalledProcessError as e:
+        # The code path signals an internal error of the timer (see '--docs').
+        raise RuntimeError(
+            "Internal error (exit %d): %s" % (e.returncode, e.cmd))
     inspectee_stdout_raw, ctimer_stdout = split_ctimer_out(stdout)
     inspectee_stdout = process_inspectee_stdout(inspectee_stdout_raw)
     run_one_single_result = did_run_one( # return a dict
@@ -673,17 +677,21 @@ def run_all(args: list, metadata_list: list, unique_count: int) -> int:
     remove_prev_log(args.log)
     num_tasks = len(metadata_list) # >= unique_count, because of repeating
     num_workers = 1 if args.sequential else min(num_tasks, NUM_WORKERS_MAX)
-    sys.stderr.write("Execute %d tasks (unique: %d), worker count: %d ...\n" % (
+    sys.stderr.write("[Starting] Task count: %d (unique: %d), worker count: %d ...\n" % (
         num_tasks, unique_count, num_workers))
     run_tests_start_time = time.time()
     result_list = pool_map(num_workers, run_one, [
         (args.timer, args.log, args.write_golden, metadata)
         for metadata in metadata_list
     ])
-    sys.stderr.write(cap_width("Completed, writing logs ...\r"))
-    sys.stderr.flush()
-    error_count, _ = print_summar_and_write_master_log(
-        args, num_tasks, run_tests_start_time, result_list)
+    create_dir_if_needed(args.log)
+    master_log_filepath = os.path.join(args.log, LOG_FILE_BASE)
+    with open(master_log_filepath, 'w') as f:
+        json.dump(result_list, f, indent=2, separators=(",", ": ")) # sorted already
+    sys.stderr.write("[Finished] %.2f sec, post-processing ...\n" % (
+        time.time() - run_tests_start_time))
+    error_count, _ = print_post_processing_summary(
+        args, num_tasks, result_list, master_log_filepath)
     return 0 if error_count == 0 else 1
 
 NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
@@ -920,8 +928,6 @@ def main():
                         help="run sequentially instead concurrently")
     parser.add_argument("-s", "--seed", metavar="S", type=int, default=None,
                         help="set the seed for the random number generator")
-    # In order to accommodate child projects, allow loading multiple declaration files
-    # in a directory instead of loading one file.
     parser.add_argument("--flakiness", metavar="DIR", type=str, default=None,
                         help="load flakiness declaration files *.flaky under DIR")
     parser.add_argument("-w", "--write-golden", action="store_true",
@@ -940,6 +946,7 @@ def main():
         sys.exit("[Error] '--timer' is not given; use '-h' for help")
     elif not os.path.isfile(args.timer):
         sys.exit("[Error] timer program not found: %s" % args.timer)
+    args.timer = os.path.relpath(args.timer)
 
     if ((len(args.paths) == 0 and args.meta == None)
      or (len(args.paths) > 0 and args.meta != None)):
@@ -1045,8 +1052,7 @@ def main():
         sys.exit(0)
 
     # here we add more fields to the metadata list; this step produces metadata_list_4
-    # 1. take care of args.repeat
-    # 2. take care of args.flakiness
+    # 1. take care of args.repeat; 2. take care of args.flakiness
     metadata_list_4 = []
     flakiness_dict = parse_flakiness_decls(args.flakiness)
     unique_count = len(metadata_list_3)
@@ -1055,7 +1061,7 @@ def main():
         comb_id = compute_comb_id(metadata["path"], metadata["args"]) # str
         metadata["comb_id"] = comb_id # str
         metadata["flaky_errors"] = flakiness_dict.get(comb_id, []) # list of str
-        for i in irange(args.repeat): # if args.repeat != 1, then args.write_golden is False
+        for i in range(args.repeat): # if args.repeat != 1, then args.write_golden is False
             metadata_copy = copy.deepcopy(metadata)
             metadata_copy["repeat"] = { "count": i + 1, "all": args.repeat }
             metadata_list_4.append(metadata_copy)
@@ -1065,7 +1071,6 @@ def main():
         random.seed(args.seed) # if args.seed == None, use a system-provided randomness source
         random.shuffle(metadata_list_4)
 
-    # run the tests
     run_all(args, metadata_list_4, unique_count)
     return 0 # regardless of whether all tests succeeded
 
