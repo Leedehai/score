@@ -35,8 +35,8 @@ printf "\033[32;1m\n# run tests, some of them being bad\n\033[0m"
 printf "\033[32;1m./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2\n\033[0m"
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2 ; exit_code=$?
 
-if [ $exit_code -ne 0 ]; then
-    printf "\033[31;1mexit code is not 0\n\033[0m"
+if [ $exit_code -ne 1 ]; then
+    printf "\033[31;1mexit code is not 1\n\033[0m"
     has_error=1
 fi
 if [ ! -f logs2/log.json ] ; then
@@ -59,8 +59,8 @@ printf "\033[32;1m./runtest.py --timer mocks/timer.py --meta mocks/meta-write-go
 if [ -f delete_me.gold ] ; then rm delete_me.gold; fi
 ./runtest.py --timer mocks/timer.py --meta mocks/meta-write-golden.json -g logs3 -w <<< "y" ; exit_code=$?
 
-if [ $exit_code -ne 0 ]; then
-    printf "\033[31;1mexit code should be 0\n\033[0m"
+if [ $exit_code -ne 1 ]; then
+    printf "\033[31;1mexit code should be 1\n\033[0m"
     has_error=1
 fi
 if [ ! -f logs2/log.json ] ; then

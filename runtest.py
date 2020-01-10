@@ -18,6 +18,7 @@ import os, sys
 py = sys.version_info
 if py.major == 2 or (py.major == 3 and py.minor < 5):
    sys.exit("[Error] mininum Python version is 3.5")
+
 import argparse
 import collections
 import copy
@@ -51,7 +52,7 @@ TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY els
 if (TERMINAL_COLS <= 25):
     sys.exit("[Error] terminal width (%d) is rediculously small" % TERMINAL_COLS)
 
-# used by did_run_one()
+# Used by did_run_one()
 def generate_result_dict(
     metadata: dict, ctimer_reports: dict, match_exit: bool, write_golden: bool,
     start_abs_time: float, end_abs_time: float,
@@ -74,7 +75,7 @@ def generate_result_dict(
         ("desc", metadata["desc"]), # str
         ("path", metadata["path"]), # str
         ("args", metadata["args"]), # list
-        ("setenv", metadata["setenv"]), # dict or None
+        ("envs", metadata["envs"]), # dict or None
         ("comb_id", metadata["comb_id"]), # unique for every (path, args) combination
         ("flaky_errors", metadata["flaky_errors"]), # list of str, the expected errors
         ("repeat", metadata["repeat"]), # dict { "count": int, "all": int }
@@ -160,7 +161,7 @@ def get_num_workers(env_var: str) -> int:
         return multiprocessing.cpu_count()
 NUM_WORKERS_MAX = get_num_workers(env_var="NUM_WORKERS") # not "NUM_WORKERS_MAX", to be consistent
 
-# possible exceptions (not Python's Exceptions) for user inputs
+# Oossible exceptions (not Python's Exceptions) for user inputs
 GOLDEN_NOT_WRITTEN_PREFIX = "golden file not written"
 GOLDEN_NOT_WRITTEN_SAME_CONTENT  = "%s: content is the same" % GOLDEN_NOT_WRITTEN_PREFIX
 GOLDEN_NOT_WRITTEN_WRONG_EXIT = "%s: the test's exit is not as expected" % GOLDEN_NOT_WRITTEN_PREFIX
@@ -179,16 +180,15 @@ def cap_width(s: str, width: int = TERMINAL_COLS) -> str:
     extra_space = width - len(s)
     return s if extra_space >= 0 else (s[:12] + "..." + s[len(s) - width - 15:])
 
-# NOTE not a class, due to a flaw in multiprocessing.Pool.map() in Python2
 def get_metadata_from_path(path: str) -> dict:
     # docs: see EXPLANATION_STRING below
     return {
         "desc": "",
         "path": path,
         "args": [],
+        "envs": None,
         "golden": None,
         "timeout_ms": None,
-        "setenv": None,
         "exit": { "type": "return", "repr": 0 }
     }
 
@@ -244,6 +244,8 @@ def get_timeout(timeout: int) -> str:
 
 # Pick a hash length
 # N = 16^8 = 2^32 => ~N^(1/2) = ~2^16 values produces a collision with P=50%
+# Here we ignore SHA1's hash collision vulnerabilities, because we are not doing
+# cryptography and we don't expect users to try to break their own tests.
 ARGS_HASH_LEN = 8 # NOTE value should sync with EXPLANATION_STRING below
 # This "ID" is made of the last two path components and the hashcode of args, e.g.
 # prog = "foo", args = []              => return: "foo-00000000"
@@ -268,13 +270,13 @@ def get_logfile_path_stem(
     log_dirname: str) -> str: # "stem" means no extension name such as ".diff"
     return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
-def make_command_invokation_str(
+def make_command_invocation_str(
     timer_path: str, result: dict, indent: int = 0) -> str:
     strs = []
-    if result["setenv"] != None:
+    if result["envs"] != None:
         strs += [
             "{0}{1}={2}".format(' ' * indent, k, v)
-            for k, v in result["setenv"].items()
+            for k, v in result["envs"].items()
         ]
     strs.append("{0}{1}={2} {3}".format(
         ' ' * indent, CTIMER_TIMEOUT_ENVKEY,
@@ -295,7 +297,7 @@ UNEXPECTED_ERROR_FORMAT = """\n\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
 """
 # when not using '--write-golden'
 def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
-    rerun_command = make_command_invokation_str(timer, result, indent = 2)
+    rerun_command = make_command_invocation_str(timer, result, indent = 2)
     if result["ok"] == True or result["error_is_flaky"] == True:
         pass
     else:
@@ -330,7 +332,7 @@ def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
         e for e in result["exceptions"]
         if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX)
     ]
-    rerun_command = make_command_invokation_str(timer, result, indent = 2)
+    rerun_command = make_command_invocation_str(timer, result, indent = 2)
     assert(len(not_written_exceptions) <= 1)
     if len(not_written_exceptions) == 0:
         sys.stderr.write(
@@ -382,7 +384,9 @@ def write_file(
 def process_inspectee_stdout(s: str) -> str:
     # remove color sequences
     s = re.sub(r"\x1b\[.*?m", "", s)
-    # do not use textwrap: unstable
+    # Do not use textwrap: unstable; they always add new kwargs, largely opaque
+    # Do not use '\n'.join(s[i:i+N] for i in range(0, len(s), N)): don't want
+    # to end up with ...\n\n...
     new_lines, cur_line, cnt = [], "", 0
     for c in s: # for each character
         cur_line += c
@@ -393,6 +397,8 @@ def process_inspectee_stdout(s: str) -> str:
         elif cnt == 90: # this limit is used by diff.html and diff_html_str.py
             new_lines.append(cur_line + '\n') # force linebreak
             cur_line, cnt = "", 0
+    if cur_line:
+        new_lines.append(cur_line)
     return ''.join(new_lines)
 
 # exit type: Sync with EXPLANATION_STRING
@@ -405,7 +411,7 @@ EXIT_TYPE_TO_FLAKINESS_ERR = {
     "quit":    "Others",
     "unknown": "Others"
 }
-# used by generate_result_dict()
+# Used by generate_result_dict()
 # NOTE this function is called ONLY IF there is an error
 def check_if_error_is_flaky(
     expected_errs: list, actual_exit_type: str, has_stdout_diff: bool) -> bool:
@@ -434,7 +440,7 @@ def get_error_summary(result_obj: dict) -> dict:
         "diff": diff_file_hyperlink, # str, or None if no need to compare or no diff found
     }
 
-# used by run_one_impl()
+# Used by run_one_impl()
 def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
                 inspectee_stdout: str, ctimer_stdout: str,
                 start_abs_time: float, end_abs_time: float) -> collections.OrderedDict:
@@ -467,7 +473,7 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
             found_golden, stdout_comparison_diff = get_diff_html_str(
                 html_title = filepath_stem.split(os.sep)[-1],
                 desc = metadata["desc"],
-                setenv = metadata["setenv"] if metadata["setenv"] else {},
+                envs = metadata["envs"] if metadata["envs"] else {},
                 command = ' '.join([ metadata["path"] ] + metadata["args"]),
                 expected_filename = golden_filename,
                 actual_filename = stdout_filename,
@@ -483,7 +489,7 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
         stdout_filename, diff_filename, exceptions
     )
 
-# used by run_one_impl()
+# Used by run_one_impl()
 def print_one_on_the_fly(metadata: dict, run_one_single_result: dict) -> None:
     # below is printing on the fly
     if metadata["repeat"]["all"] > 1:
@@ -524,7 +530,7 @@ def print_one_on_the_fly(metadata: dict, run_one_single_result: dict) -> None:
             time.sleep(0.05) # let the line stay for a while: prettier, though adding overhead
         sys.stderr.flush()
 
-# used by run_all()
+# Used by run_all()
 def remove_prev_log(log_dir: str) -> None:
     if os.path.isdir(log_dir):
         # to prevent perplexing cases e.g. master log says all is good, but *.diff files
@@ -533,7 +539,7 @@ def remove_prev_log(log_dir: str) -> None:
     elif os.path.exists(log_dir):
         sys.exit("[Error] path exists as a non-directory: %s" % log_dir)
 
-# used by run_all()
+# Used by run_all()
 def print_post_processing_summary(
     args: list, num_tasks: int, result_list: list, master_log_filepath: str) -> tuple:
     assert(len(result_list) == num_tasks)
@@ -557,7 +563,7 @@ def print_post_processing_summary(
     ))
     return error_count, unique_error_count
 
-# used by print_post_processing_summary(), returns error count and unique
+# Used by print_post_processing_summary(), returns error count and unique
 # error count (unique error count <= error count, because of args.repeat)
 def count_and_print_for_golden_writing(result_list: list, timer_prog: str) -> tuple:
     error_result_count = 0
@@ -581,7 +587,7 @@ def count_and_print_for_golden_writing(result_list: list, timer_prog: str) -> tu
         golden_same_content_count, golden_wrong_exit_count))
     return error_result_count, error_result_count
 
-# used by print_post_processing_summary(), returns error count and unique error count
+# Used by print_post_processing_summary(), returns error count and unique error count
 def count_and_print_for_test_running(result_list: list, timer_prog: str) -> tuple:
     error_result_count, unique_error_tests = 0, set()
     for result in result_list:
@@ -637,7 +643,7 @@ def clear_rotating_log(q):
     except (IOError, OSError): # see reason in add_rotating_log()
         pass
 
-# used by run_one()
+# Used by run_one()
 def run_one_impl(
     timer: str, log_dirname: str, write_golden: bool,
     env_values: dict, metadata: dict) -> dict:
@@ -669,8 +675,8 @@ def run_one(input_args: list) -> dict:
         CTIMER_DELIMITER_ENVKEY : DELIMITER_STR,
         CTIMER_TIMEOUT_ENVKEY   : get_timeout(metadata["timeout_ms"])
     }
-    if metadata["setenv"] != None:
-        env_values.update(metadata["setenv"])
+    if metadata["envs"] != None:
+        env_values.update(metadata["envs"])
     return run_one_impl(timer, log_dirname, write_golden, env_values, metadata)
 
 def run_all(args: list, metadata_list: list, unique_count: int) -> int:
@@ -694,10 +700,12 @@ def run_all(args: list, metadata_list: list, unique_count: int) -> int:
         args, num_tasks, result_list, master_log_filepath)
     return 0 if error_count == 0 else 1
 
-NEEDED_METADATA_OBJECT_FIELD = [ # sync with EXPLANATION_STRING's spec
-    "desc", "path", "args", "golden", "timeout_ms", "setenv", "exit"
+NEEDED_METADATA_OBJECT_FIELD = [
+    # sync with EXPLANATION_STRING's spec
+    "desc", "path", "args", "golden", "timeout_ms", "envs", "exit"
 ]
-NEEDED_EXIT_STATUS_OBJECT_FILED = [ # sync with EXPLANATION_STRING's spec
+NEEDED_EXIT_STATUS_OBJECT_FILED = [
+    # sync with EXPLANATION_STRING's spec
     "type", "repr"
 ]
 VALID_ARG_SPECIAL_CHARS = "._+-*/=^@#" # sync with EXPLANATION_STRING's spec
@@ -735,20 +743,20 @@ def check_metadata_list_format(metadata_list: list) -> list: # not comprehensive
                 if type(timeout_ms) != int or timeout_ms <= 0:
                     errors.append("metadata #%-2d field \"timeout_ms\" "
                                 "is not a positive number" % (i + 1))
-        if "setenv" in metadata:
-            setenv = metadata["setenv"]
-            if setenv == None:
+        if "envs" in metadata:
+            envs = metadata["envs"]
+            if envs == None:
                 pass
             else:
-                if type(metadata["setenv"]) != dict:
+                if type(metadata["envs"]) != dict:
                     errors.append(
-                        "metadata #%-2d field \"setenv\" is not a dict" % (i + 1))
+                        "metadata #%-2d field \"envs\" is not a dict" % (i + 1))
                 else:
-                    if any((type(k) != str) or ' ' in k for k in setenv.keys()):
-                        errors.append("metadata #%-2d field \"setenv\" requires "
+                    if any((type(k) != str) or ' ' in k for k in envs.keys()):
+                        errors.append("metadata #%-2d field \"envs\" requires "
                                     "keys to be strings without spaces" % (i + 1))
-                    if any((type(v) != str) or ' ' in v for v in setenv.values()):
-                        errors.append("metadata #%-2d field \"setenv\" requires "
+                    if any((type(v) != str) or ' ' in v for v in envs.values()):
+                        errors.append("metadata #%-2d field \"envs\" requires "
                                     "values to be strings without spaces" % (i + 1))
         if "exit" in metadata:
             for needed_exit_status_field in NEEDED_EXIT_STATUS_OBJECT_FILED:
@@ -797,22 +805,28 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     stores in JSON format an array of metadata objects. Each has keys:
         "desc"    : string
             description of the test
+        \x1b[33m=== parameters contolling command invocation ===\x1b[0m
         "path"    : string
             path to the test executable binary
         "args"    : array of strings
             the commandline arguments, all characters are alphanumeric or
             one of "._+-*/=^@#"
-        "golden"  : string or null
-            path to the golden file (see below); null: not needed
-            * if '--write-golden' is given, stdout is written to this file
-            * tests with the same expected stdout should not share the same
-              file, to avoid race condition when '--write-golden' is given
-        "timeout_ms" : integer or null
-            the max processor time (ms); null: effectively infinite
-        "setenv"  : dict or null
+        "envs"  : dict or null
             environment variables provided when running the test executable
             * each entry's key and value are strings without spaces
-        "exit"    : exit status object (see below), the expected exit status
+        \x1b[33m=== parameters controlling test checking ===\x1b[0m
+        "golden"  : string or null
+            path to the golden file; null: not needed
+            * if the golden file path is given, the inspectee's stdout
+              will be compared with the golden file content
+            * if '--write-golden' is given, inspectee's stdout is written
+              to this file
+            * different tests should have different golden files, even if
+              their contents are the same, to avoid possible data racing
+              when writing the files for '--write-golden'
+        "timeout_ms" : integer or null
+            the max processor time (ms) allowed; null: effectively infinite
+        "exit"    : exit status object (see below), storing the expected exit
     * all paths are relative to the current working directory
     * mutually exclusive: --meta, --paths
 
@@ -822,7 +836,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     test executable paths in commandline. Other fields required by a metadata
     object (see above) of each test will automatically get these values:
         desc = "", path = (the path provided with this option),
-        args = [], golden = null, timeout_ms = null, setenv = null,
+        args = [], envs = null, golden = null, timeout_ms = null,
         exit = { "type": "return", "repr": 0 } (exit status, see below)
     * mutually exclusive: --meta, --paths
 
@@ -891,12 +905,12 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     The master log is a JSON file containing an array of result objects. To
     see the specification of the result object, please refer to the in-line
     comments in function `generate_result_dict()`.
-    The master log is human-readable, but is more suited to be loaded by
-    another automation script to render it.
+    The master log is human-readable, but is more suited to be loaded and
+    rendered by a script.
 
 \x1b[33mMore on concepts:\x1b[0m
-    metadata        (self-evident) description of a test
-    golden file     the file storing the expected stdout output
+    metadata        description of a test: program path, arguments, ...
+    golden file     the file storing the expected stdout output, nullable
     master log      a JSON file log.json under the log directory
     log directory   specified by '--log', which stores the master log
                     and tests' stdout and diff, if any, among others
@@ -912,7 +926,8 @@ def main():
     parser = argparse.ArgumentParser(
         description = "Test runner: with timer, logging, diff in HTML",
         epilog = "Unless '--docs' is given, exactly one of '--paths' "
-                 "and '--meta' is needed."
+                 "and '--meta' is needed.\n"
+                 "Program exit code is 0 on success, 1 otherwise."
     )
     parser.add_argument("--timer", metavar="TIMER", type=str, default=None,
                         help="path to the timer program")
@@ -1068,11 +1083,11 @@ def main():
 
     # here we shuffle the tests
     if not args.write_golden:
-        random.seed(args.seed) # if args.seed == None, use a system-provided randomness source
+        # if args.seed == None, use a system-provided randomness source
+        random.seed(args.seed)
         random.shuffle(metadata_list_4)
 
-    run_all(args, metadata_list_4, unique_count)
-    return 0 # regardless of whether all tests succeeded
+    return run_all(args, metadata_list_4, unique_count)
 
 if __name__ == "__main__":
     sys.exit(main())
