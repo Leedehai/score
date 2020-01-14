@@ -271,19 +271,23 @@ def get_logfile_path_stem(
     return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
 def make_command_invocation_str(
-    timer_path: str, result: dict, indent: int = 0) -> str:
+    timer_path: str, params: dict, indent: int = 0) -> str:
+    """
+    params is a dict containing the following key-value pairs:
+    "envs" (dict), "timeout_ms" (int or None), "path" (str), "args" (str[])
+    """
     strs = []
-    if result["envs"] != None:
+    if params["envs"] != None:
         strs += [
             "{0}{1}={2}".format(' ' * indent, k, v)
-            for k, v in result["envs"].items()
+            for k, v in params["envs"].items()
         ]
     strs.append("{0}{1}={2} {3}".format(
         ' ' * indent, CTIMER_TIMEOUT_ENVKEY,
-        get_timeout(result["timeout_ms"]), timer_path
+        get_timeout(params["timeout_ms"]), timer_path
     ))
     strs += textwrap.wrap(
-        text = "%s %s" % (result["path"], ' '.join(result["args"])),
+        text = "%s %s" % (params["path"], ' '.join(params["args"])),
         width = 70,
         initial_indent = ' ' * (2 * indent),
         subsequent_indent = ' ' * (3 * indent),
@@ -307,7 +311,9 @@ def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
             assert(len(result_exceptions) == 1
                 and result_exceptions[0] == GOLDEN_FILE_MISSING)
             error_summary = "%s: %s" % (
-                GOLDEN_FILE_MISSING, result["stdout"]["golden_file"])
+                GOLDEN_FILE_MISSING,
+                os.path.relpath(result["stdout"]["golden_file"])
+            )
         else:
             error_summary = get_error_summary(result)
             error_summary = '\n'.join([
@@ -327,33 +333,36 @@ def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
 
 # when using '--write-golden'
 def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
-    attempted_golden_file = result["stdout"]["golden_file"]
+    attempted_golden_file = result["stdout"]["golden_file"] # abs path
     not_written_exceptions = [
         e for e in result["exceptions"]
         if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX)
     ]
-    rerun_command = make_command_invocation_str(timer, result, indent = 2)
     assert(len(not_written_exceptions) <= 1)
+    hyperlink_to_golden_file = hyperlink_str(
+        attempted_golden_file, os.path.relpath(attempted_golden_file))
     if len(not_written_exceptions) == 0:
         sys.stderr.write(
-            "\n\x1b[36m[ok: content changed] %s\x1b[0m\n"
-            "  written: %s (%d B)\n\x1b[2m%s\x1b[0m\n" % (
-                result["desc"], attempted_golden_file,
-                os.path.getsize(attempted_golden_file), rerun_command
+            "\n\x1b[36m[ok: new or modified] %s\x1b[0m\n"
+            "  \x1b[2mwritten: %s (%d B)\x1b[0m\n" % (
+                result["desc"], hyperlink_to_golden_file,
+                os.path.getsize(attempted_golden_file)
         ))
         return None
     assert(len(not_written_exceptions) == 1)
     if GOLDEN_NOT_WRITTEN_SAME_CONTENT in not_written_exceptions:
         sys.stderr.write(
             "\n\x1b[36m[ok: same content] %s\x1b[0m\n"
-            "  skipped: %s\n\x1b[2m%s\x1b[0m\n" % (
-            result["desc"], attempted_golden_file, rerun_command))
+            "  \x1b[2mskipped: %s\x1b[0m\n" % (
+            result["desc"], hyperlink_to_golden_file))
         return GOLDEN_NOT_WRITTEN_SAME_CONTENT
     elif GOLDEN_NOT_WRITTEN_WRONG_EXIT in not_written_exceptions:
+        rerun_command = make_command_invocation_str(
+            timer, result, indent = 2)
         sys.stderr.write(
             "\n\x1b[33m[error: unexpected exit status] %s\x1b[0m\n"
-            "  skipped: %s\n\x1b[2m%s\x1b[0m\n" % (
-            result["desc"], attempted_golden_file, rerun_command))
+            "  \x1b[2mskipped: %s\n%s\x1b[0m\n" % (
+            result["desc"], hyperlink_to_golden_file, rerun_command))
         return GOLDEN_NOT_WRITTEN_WRONG_EXIT # the only one item
     else:
         assert(False)
@@ -441,9 +450,14 @@ def get_error_summary(result_obj: dict) -> dict:
     }
 
 # Used by run_one_impl()
+PLATFORM_INFO = {
+    "os": "%s %s" % (platform.system().lower(), platform.machine().replace("x86_64", "x64")),
+    "python": platform.python_version(),
+    "cwd": os.getcwd(), # abs path
+}
 def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
                 inspectee_stdout: str, ctimer_stdout: str,
-                start_abs_time: float, end_abs_time: float) -> collections.OrderedDict:
+                start_abs_time: float, end_abs_time: float, timer: str) -> collections.OrderedDict:
     assert(len(ctimer_stdout))
     ctimer_dict = json.loads(ctimer_stdout)
     match_exit = (metadata["exit"]["type"] == ctimer_dict["exit"]["type"]
@@ -472,9 +486,10 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
         else: # compare stdout with golden
             found_golden, stdout_comparison_diff = get_diff_html_str(
                 html_title = filepath_stem.split(os.sep)[-1],
+                platform_info = PLATFORM_INFO,
                 desc = metadata["desc"],
-                envs = metadata["envs"] if metadata["envs"] else {},
-                command = ' '.join([ metadata["path"] ] + metadata["args"]),
+                driver = metadata["path"],
+                command_invocation = make_command_invocation_str(timer, metadata, indent = 2),
                 expected_filename = golden_filename,
                 actual_filename = stdout_filename,
             )
@@ -664,7 +679,7 @@ def run_one_impl(
     run_one_single_result = did_run_one( # return a dict
         log_dirname, write_golden, metadata,
         inspectee_stdout, ctimer_stdout,
-        start_abs_time, end_abs_time
+        start_abs_time, end_abs_time, timer,
     )
     print_one_on_the_fly(metadata, run_one_single_result)
     return run_one_single_result

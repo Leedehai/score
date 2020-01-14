@@ -10,6 +10,7 @@
 
 import os
 import difflib
+from typing import Tuple
 
 MISSING_EXPECTED_FILE_HTML_FORMAT = "<div style='border:solid red 3px; width:80ch; padding:1ch'>\
 <b style='font-size:32px;color:red;text-align:center'>\
@@ -26,19 +27,25 @@ def get_size_str(filename: str) -> str:
 
 # return: (golden_file_found, html_string)
 def get_diff_html_str(
-    html_title: str, desc: str, envs: dict, command: str,
-    expected_filename: str, actual_filename: str):
+    html_title: str, platform_info: dict, desc: str,
+    driver: str, command_invocation: str,
+    expected_filename: str, actual_filename: str) -> Tuple[bool, str]:
     assert(actual_filename != None and expected_filename != None)
     assert(os.path.isfile(actual_filename))
     found_expected = os.path.isfile(expected_filename)
     expected_lines = list(open(expected_filename, 'r')) if found_expected else []
     actual_lines = list(open(actual_filename, 'r'))
+    if actual_lines == expected_lines:
+        return True, None # has golden file, same content
     feed_collection = [
-        html_title, desc, str(envs), command,
+        html_title,  "<br>&nbsp;&nbsp;".join([
+            "%s: %s" % (k, v) for k, v in platform_info.items()
+        ]),
+        desc, driver, command_invocation,
         get_size_str(expected_filename) if found_expected else "not found",
-        os.path.abspath(expected_filename), expected_filename,
+        os.path.abspath(expected_filename), os.path.relpath(expected_filename),
         get_size_str(actual_filename),
-        os.path.abspath(actual_filename), actual_filename
+        os.path.abspath(actual_filename), os.path.relpath(actual_filename)
     ]
     html_differ = difflib.HtmlDiff(tabsize=4, wrapcolumn=93) # 93: if change, only larger
     diff_str_as_html_table = html_differ.make_table(
@@ -50,7 +57,5 @@ def get_diff_html_str(
             MISSING_EXPECTED_FILE_HTML_FORMAT.format(
                 filename = expected_filename) + diff_str_as_html_table,
         )) # missing golden file, diff str
-    if actual_lines == expected_lines:
-        return True, None # has golden file, same content
     return True, DIFF_HTML_FORMAT % tuple((
         *feed_collection, diff_str_as_html_table)) # has golden file, diff str

@@ -15,6 +15,10 @@
             font-size: 12px;
             border: medium;
         }
+        .info-div {
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
         .info-key {
             font-family: monospace;
             font-size: 12px;
@@ -23,6 +27,11 @@
         .info-value {
             font-family: monospace;
             font-size: 12px;
+        }
+        .info-value-pre {
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 0.2em;
         }
         a {
             color: #0000ee;
@@ -105,30 +114,34 @@
 
 <body onload="actOnLoad()">
     <h1 class="head">Diff</h1>
-    <p>
+    <div class="info-div">
         <span class="info-key">this file</span><br>
         <span class="info-value">&nbsp;&nbsp;<span id="currentFilename"></span></span>
-    </p>
-    <p>
+    </div>
+    <div class="info-div">
+        <span class="info-key">working environment</span><br>
+        <span class="info-value">&nbsp;&nbsp;%s</span>
+    </div>
+    <div class="info-div">
         <span class="info-key">description</span><br>
         <span class="info-value">&nbsp;&nbsp;%s</span>
-    </p>
-    <p>
-        <span class="info-key">environ</span><br>
+    </div>
+    <div class="info-div">
+        <span class="info-key">driver binary</span><br>
         <span class="info-value">&nbsp;&nbsp;%s</span>
-    </p>
-    <p>
-        <span class="info-key">command</span><br>
-        <span class="info-value">&nbsp;&nbsp;%s</span>
-    </p>
-    <p>
+    </div>
+    <div class="info-div">
+        <span class="info-key">invocation</span>
+        <pre class="info-value-pre">%s</pre>
+    </div>
+    <div class="info-div">
         <span class="info-key">expected stdout (%s)</span><br> <!-- size string or "not found" -->
         <span class="info-value">&nbsp;&nbsp;<a href='%s' id="expected_file_url">%s</a></span>
-    </p>
-    <p>
+    </div>
+    <div class="info-div">
         <span class="info-key">actual stdout (%s)</span><br> <!-- size string -->
         <span class="info-value">&nbsp;&nbsp;<a href='%s' id="actual_file_url">%s</a></span>
-    </p>
+    </div>
 
     <!-- table placeholder: Python's difflib.HtmlDiff.make_table() -->
     %s
