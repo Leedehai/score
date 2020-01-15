@@ -242,24 +242,26 @@ def split_ctimer_out(s: str) -> tuple:
 def get_timeout(timeout: int) -> str:
     return str(timeout if timeout != None else INFINITE_TIME)
 
-# Pick a hash length
 # N = 16^8 = 2^32 => ~N^(1/2) = ~2^16 values produces a collision with P=50%
 # Here we ignore SHA1's hash collision vulnerabilities, because we are not doing
 # cryptography and we don't expect users to try to break their own tests.
-ARGS_HASH_LEN = 8 # NOTE value should sync with EXPLANATION_STRING below
-# This "ID" is made of the last two path components and the hashcode of args, e.g.
-# prog = "foo", args = []              => return: "foo-00000000"
-# prog = "baz/bar/foo", args = []      => return: "bar/foo-00000000"
-# prog = "baz/bar/foo", args = [ '9' ] => return: "bar/foo-0ade7c2c"
-def compute_comb_id(prog: str, args: list) -> str:
-    assert(type(args) == list)
+CASE_ID_HASH_LEN = 8 # NOTE value should sync with EXPLANATION_STRING below
+# prog = "foo", args = [], envs = {}              => return: "foo-00000000"
+# prog = "baz/bar/foo", args = [], envs = {}      => return: "bar/foo-00000000"
+# prog = "baz/bar/foo", args = [ '9' ], envs = {} => return: "bar/foo-0ade7c2c"
+def compute_comb_id(prog: str, args: list, envs: dict) -> str:
+    assert(type(args) == list and type(envs) == dict)
     prog_basename = os.path.basename(prog)
     prog_dir_basename = os.path.basename(os.path.dirname(prog)) # "" if prog doesn't contain '/'
     path_repr = os.path.join(prog_dir_basename, prog_basename)
-    args_hash = '0' * ARGS_HASH_LEN
-    if len(args):
-        args_hash = hashlib.sha1(' '.join(args).encode()).hexdigest()[:ARGS_HASH_LEN]
-    return "%s-%s" % (path_repr, args_hash.lower())
+    case_hash = '0' * CASE_ID_HASH_LEN
+    if len(args) or len(envs):
+        items_to_hash = args + [
+            ("$%s=%s" % (k, envs[k])) for k in sorted(envs.keys())
+        ]
+        case_hash = hashlib.sha1(
+            ' '.join(items_to_hash).encode()).hexdigest()[:CASE_ID_HASH_LEN]
+    return "%s-%s" % (path_repr, case_hash.lower())
 
 # This path stem (meaning there is no extension such as ".diff") is made of the
 # comb_id, repeat count, log_dirname. E.g.
@@ -864,10 +866,9 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     comments. Each non-comment line is a flakiness declaration entry with
     space-separated string fields in order:
         1. test executable path (last two path components joined with '/')
-        2. argument hash string computed: (1) joining args with single blank
-           spaces, and then (2) compute its SHA1 base16 representation (as a
-           special case, all-zeros if there's no argument), then finally (3)
-           take the first 8 digits
+        2. case id hash string (computed from commandline arguments and
+           alphabetically-sorted environment variables) as appeared on the
+           corresponding result object.
         3. type of expected error: one or more (joined by '|': non-exclusive
            'or') of WrongExitCode, Timeout, Signal, StdoutDiff, Others
         * you should ensure the field 1 of each entry is unique across all
@@ -1088,7 +1089,7 @@ def main():
     unique_count = len(metadata_list_3)
     for metadata in metadata_list_3:
         # case id is unique for every (path, args) combination
-        comb_id = compute_comb_id(metadata["path"], metadata["args"]) # str
+        comb_id = compute_comb_id(metadata["path"], metadata["args"], metadata["envs"]) # str
         metadata["comb_id"] = comb_id # str
         metadata["flaky_errors"] = flakiness_dict.get(comb_id, []) # list of str
         for i in range(args.repeat): # if args.repeat != 1, then args.write_golden is False
