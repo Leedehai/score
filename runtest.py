@@ -37,6 +37,8 @@ import time
 # custom modules
 from diff_html_str import get_diff_html_str
 from flakiness import parse_flakiness_decls
+import score_utils
+import score_view
 
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
@@ -123,29 +125,6 @@ def ensure_str(s) -> str:
     elif type(s) == str:
         return s
     raise TypeError("param 's' is not bytes or str")
-
-def guess_emulator_supports_hyperlink() -> bool:
-    if (("SSH_CLIENT" in os.environ)
-        or ("SSH_CONNECTION" in os.environ)
-        or ("SSH_TTY" in os.environ)):
-        return False
-    if platform.system().lower() == "linux":
-        return True # VTE terminals (GNOME, Guake, Tilix, ...) are fine
-    elif platform.system().lower() == "darwin": # macOS
-        if os.environ.get("TERM_PROGRAM", "").lower().startswith("apple"):
-            return False # Apple's default Terminal.app is lame, recommend iTerm2.app
-        return True
-    return False
-
-# Make a hyperlink in terminal without displaying the lengthy URL
-# https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
-# Compatible with GNOME, iTerm2, Guake, hTerm, etc.
-# NOTE the URL should not contain ';' or ':' or ASCII code outside 32-126.
-def hyperlink_str(url: str, description : str = "link") -> str:
-    if (not IS_ATTY) or (not guess_emulator_supports_hyperlink()):
-        return url
-    url = url if "://" in url else ("file://" + os.path.abspath(url))
-    return "\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\" % (url, description)
 
 def get_num_workers(env_var: str) -> int:
     env_num_workers = os.environ.get(env_var, "")
@@ -239,9 +218,6 @@ def split_ctimer_out(s: str) -> tuple:
     ctimer_stdout = s[ctimer_begin_index + len(DELIMITER_STR) : report_end_index]
     return inspectee_stdout.rstrip(), ctimer_stdout.rstrip()
 
-def get_timeout(timeout: int) -> str:
-    return str(timeout if timeout != None else INFINITE_TIME)
-
 # N = 16^8 = 2^32 => ~N^(1/2) = ~2^16 values produces a collision with P=50%
 # Here we ignore SHA1's hash collision vulnerabilities, because we are not doing
 # cryptography and we don't expect users to try to break their own tests.
@@ -272,38 +248,13 @@ def get_logfile_path_stem(
     log_dirname: str) -> str: # "stem" means no extension name such as ".diff"
     return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
-def make_command_invocation_str(
-    timer_path: str, params: dict, indent: int = 0) -> str:
-    """
-    params is a dict containing the following key-value pairs:
-    "envs" (dict), "timeout_ms" (int or None), "path" (str), "args" (str[])
-    """
-    strs = []
-    if params["envs"] != None:
-        strs += [
-            "{0}{1}={2}".format(' ' * indent, k, v)
-            for k, v in params["envs"].items()
-        ]
-    strs.append("{0}{1}={2} {3}".format(
-        ' ' * indent, CTIMER_TIMEOUT_ENVKEY,
-        get_timeout(params["timeout_ms"]), timer_path
-    ))
-    strs += textwrap.wrap(
-        text = "%s %s" % (params["path"], ' '.join(params["args"])),
-        width = 70,
-        initial_indent = ' ' * (2 * indent),
-        subsequent_indent = ' ' * (3 * indent),
-        break_long_words = False, break_on_hyphens = False,
-    )
-    return " \\\n".join(strs)
-
 UNEXPECTED_ERROR_FORMAT = """\n\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
 {error_summary}
 \x1b[2m{rerun_command}\x1b[0m
 """
 # when not using '--write-golden'
 def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
-    rerun_command = make_command_invocation_str(timer, result, indent = 2)
+    rerun_command = score_utils.make_command_invocation_str(timer, result, indent = 2)
     if result["ok"] == True or result["error_is_flaky"] == True:
         pass
     else:
@@ -341,7 +292,7 @@ def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
         if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX)
     ]
     assert(len(not_written_exceptions) <= 1)
-    hyperlink_to_golden_file = hyperlink_str(
+    hyperlink_to_golden_file = score_utils.hyperlink_str(
         attempted_golden_file, os.path.relpath(attempted_golden_file))
     if len(not_written_exceptions) == 0:
         sys.stderr.write(
@@ -359,7 +310,7 @@ def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
             result["desc"], hyperlink_to_golden_file))
         return GOLDEN_NOT_WRITTEN_SAME_CONTENT
     elif GOLDEN_NOT_WRITTEN_WRONG_EXIT in not_written_exceptions:
-        rerun_command = make_command_invocation_str(
+        rerun_command = score_utils.make_command_invocation_str(
             timer, result, indent = 2)
         sys.stderr.write(
             "\n\x1b[33m[error: unexpected exit status] %s\x1b[0m\n"
@@ -442,7 +393,7 @@ def get_error_summary(result_obj: dict) -> dict:
         exit_error = None
     diff_file = result_obj["stdout"]["diff_file"]
     if diff_file != None:
-        diff_file_hyperlink = hyperlink_str(
+        diff_file_hyperlink = score_utils.hyperlink_str(
             diff_file, description = os.path.basename(diff_file))
     else:
         diff_file_hyperlink = None
@@ -491,7 +442,8 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
                 platform_info = PLATFORM_INFO,
                 desc = metadata["desc"],
                 driver = metadata["path"],
-                command_invocation = make_command_invocation_str(timer, metadata, indent = 2),
+                command_invocation = score_utils.make_command_invocation_str(
+                    timer, metadata, indent = 2),
                 expected_filename = golden_filename,
                 actual_filename = stdout_filename,
             )
@@ -575,7 +527,7 @@ def print_post_processing_summary(
         "all passed" if error_count == 0 else (
             "unexpected error {err} (unique: {unique_err})".format(
                 err = error_count, unique_err = unique_error_count)),
-        hyperlink_str(os.path.relpath(
+        score_utils.hyperlink_str(os.path.relpath(
             master_log_filepath), description = LOG_FILE_BASE)
     ))
     return error_count, unique_error_count
@@ -690,7 +642,7 @@ def run_one(input_args: list) -> dict:
     timer, log_dirname, write_golden, metadata = input_args
     env_values = {
         CTIMER_DELIMITER_ENVKEY : DELIMITER_STR,
-        CTIMER_TIMEOUT_ENVKEY   : get_timeout(metadata["timeout_ms"])
+        CTIMER_TIMEOUT_ENVKEY   : score_utils.get_timeout(metadata["timeout_ms"])
     }
     if metadata["envs"] != None:
         env_values.update(metadata["envs"])

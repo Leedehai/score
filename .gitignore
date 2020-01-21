@@ -1,5 +1,6 @@
 *.o
 *log*
+!*logo*
 *py[co]
 .DS_Store
 .vscode

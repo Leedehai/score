@@ -30,6 +30,17 @@ if [ $(ls logs1/*.diff.html | wc -l) -ne 0 ] ; then
     has_error=1
 fi
 
+printf "\033[32;1m./score_view.py --title \"Mock tests\" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html\n\033[0m"
+./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html ; exit_code=$?
+if [ $exit_code -ne 0 ]; then
+    printf "\033[31;1mexit code is not 0\n\033[0m"
+    has_error=1
+fi
+if [ ! -f logs1/html/view_log.html ] ; then
+    printf "\033[31;1mmissing: logs1/html/view_log.html\n\033[0m"
+    has_error=1
+fi
+
 # run tests, some of them being bad
 printf "\033[32;1m\n# run tests, some of them being bad\n\033[0m"
 printf "\033[32;1m./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2\n\033[0m"
@@ -51,6 +62,17 @@ fi
 if [ $(ls logs2/*.diff.html | wc -l) -ne 3 ] ; then
     printf "\033[31;1m*.diff.html count incorrect (expect 3):\n\033[0m"
     ls logs2/*.diff.html
+    has_error=1
+fi
+
+printf "\033[32;1m./score_view.py --title \"Mock tests\" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html\n\033[0m"
+./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html ; exit_code=$?
+if [ $exit_code -ne 0 ]; then
+    printf "\033[31;1mexit code is not 0\n\033[0m"
+    has_error=1
+fi
+if [ ! -f logs2/html/view_log.html ] ; then
+    printf "\033[31;1mmissing: logs2/html/view_log.html\n\033[0m"
     has_error=1
 fi
 

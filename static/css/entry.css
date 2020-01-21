@@ -1,0 +1,176 @@
+.test_entry_button {
+    width: 99%;
+    background-color: transparent;
+    color: #222222;
+    border: #e5e5e5 solid 1px;
+    cursor: pointer;
+    text-align: left;
+    outline: none;
+    font-family: Helvetica, sans-serif;
+    font-size: 14px;
+    margin: 2px;
+    padding: 1px 7px;
+    position: relative;
+}
+
+.test_entry_button #status_icon {
+    position: relative;
+    top: 1px;
+}
+
+.test_entry_button #status_message {
+    position: absolute;
+    right: 0.5em;
+    color: #aaaaaa;
+    font-family: Helvetica, sans-serif;
+    visibility: hidden;
+}
+
+.test_entry_expansion {
+    background-color: transparent;
+    max-height: 0;
+    padding: 0px 8px;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    font-family: 'Source Sans Pro', Helvetica, sans-serif;
+    font-size: 14px;
+}
+
+.test_entry_expansion .meta_table_area table {
+    margin-right: 5em;
+    float: left; /* Make tables side-by-side */
+    padding: 0px 8px;
+    font-family: 'Source Sans Pro', Helvetica, sans-serif;
+    font-size: 14px;
+}
+
+.test_entry_expansion .meta_table_area table tr {
+    padding-left: 1px;
+}
+
+.test_entry_expansion .meta_table_area table tr td {
+    width: 10em;
+}
+
+.test_entry_expansion .golden_file_link_span a {
+    font-size: 14px;
+    color: RoyalBlue;
+    text-decoration: underline;
+}
+
+.invocation_button {
+    margin-top: 6px;
+    margin-left: 10px;
+    color: gray;
+    background-color: transparent;
+    cursor: pointer;
+    text-align: left;
+    font-family: 'Source Sans Pro', Helvetica, sans-serif;
+    font-size: 14px;
+    text-decoration: underline;
+}
+
+.invocation_copy_button {
+    margin-left: 0.5em;
+    font-size: 10px;
+    cursor: pointer;
+    color: blue;
+    text-decoration: underline;
+    visibility: hidden;
+}
+
+.invocation_expansion {
+    background-color: transparent;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease-out;
+    width: 75em;
+    font-family: Courier, monospace;
+    font-size: 10px;
+    position: relative;
+}
+
+.invocation_expansion pre {
+    margin: 6px;
+    border-style: none; /* becomes "solid" in some cases (by JavasScript) */
+    border-width: 1px;
+    border-color: LightSteelBlue;
+}
+
+.test_entry_expanded,
+.test_entry_button:hover {
+    background-color: #eeeeee;
+}
+
+.test_entry_expanded #status_message,
+.test_entry_button:hover #status_message {
+    visibility: visible;
+}
+
+.area_divider {
+    clear: left; /* Do not allow floating elements on the left */
+    height: 1px;
+    border: none;
+    width: 30em;
+    padding-top: 0.5em;
+    margin-left: 10em;
+    border-bottom: 1px solid #eeeeee;
+}
+
+.test_entry_expansion .results_table_area {
+    margin-top: 0.5em;
+}
+
+.test_entry_expansion .results_table_area table {
+    padding: 0px 8px;
+    font-family: 'Source Sans Pro', Helvetica, sans-serif;
+    font-size: 14px;
+    text-align: center;
+    border-collapse: collapse;
+}
+
+.test_entry_expansion .results_table_area table tr td .comment {
+    font-size: 10px;
+    color: #aaaaaa;
+    text-decoration: none;
+}
+
+.test_entry_expansion .results_table_area table tr:hover td {
+    background-color: #fafafa;
+}
+
+.test_entry_expansion .results_table_area table tr th {
+    font-weight: bold;
+}
+
+.test_entry_expansion .results_table_area table tr th,
+.test_entry_expansion .results_table_area table tr td {
+    width: 7em;
+}
+
+.test_entry_expansion .results_table_area table tr th:nth-child(1),
+.test_entry_expansion .results_table_area table tr td:nth-child(1) {
+    width: 2em;
+}
+
+.test_entry_expansion .results_table_area table tr th:nth-last-child(1),
+.test_entry_expansion .results_table_area table tr td:nth-last-child(1) {
+    width: 12em;
+}
+
+.test_entry_expansion .results_table_area table tr td a {
+    font-size: 14px;
+    color: RoyalBlue;
+}
+
+.test_entry_expansion .results_table_area .success {
+    color: #4caf50; /* Also see test-entries.js */
+}
+
+.test_entry_expansion .results_table_area .error {
+    color: #f03f50; /* Also see test-entries.js */
+}
+
+.test_entry_expansion .results_table_area .error_but_flaky {
+    color: #9932cc; /* Also see test-entries.js */
+}

@@ -7,7 +7,7 @@ Utilities to run tests.
 
 ## Prerequsites:
 - Linux or macOS (Windows not tested)
-- Python3.5+
+- Python3.5+, no third-party libraries needed
 
 ## Files
 
@@ -89,19 +89,44 @@ rm -rf logs2
 rm -rf logs3 && rm -f delete_me.gold
 ```
 
-### [view.py](view.py)
+### [score_view.py](score_view.py)
 
-Result viewer, which generates a static website to view the tests' results in browser.
+Generate a static website to view test results in browser.
+It can be used as a standalone program or as a package.
 
-No third-party libraries needed.
+```
+./score_view.py -h
+usage: score_view.py [-h] [--title TITLE] --timer PROG --log LOG
+                     [--to-dir NEW_PATH]
 
-```sh
-./viwe.py --help
-# TODO
+Static site generator for test results
+
+optional arguments:
+  -h, --help         show this help message and exit
+  --title TITLE      title of tests, default: 'Tests'
+  --timer PROG       path to the timer program used to run the tests
+  --log LOG          path to the master log, written by runtest.py
+  --to-dir NEW_PATH  directory to write results (if the directory already
+                     exits, it will be replaced), default: ./html
+
+For requirements of the timer and log file: see runtest.py --docs
 ```
 
-#### Examples:
-TODO
+The resulting website contains a expandable list of results, like this:
+
+![example_view_1.png](./example_view_1.png)
+![example_view_2.png](./example_view_2.png)
+
+#### Examples
+```sh
+# Using runtest.py's examples above
+./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html
+./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html
+```
+
+#### Image resource copyright
+
+[check_logo_light.jpg](static/img/check_logo_light.jpg): from [this website](https://www.pinterest.com/pin/368802656984876731/), license unknown
 
 ### [diff_html_str.py](diff_html_str.py)
 
