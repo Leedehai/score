@@ -27,9 +27,20 @@
             <span id="test_directory_breadcumbs"><!-- JS generated --></span>
             <span class="master_log_link"><a href="{master_log}" target="_blank">raw log</a></span>
         </div>
-        <div class="view_control_panel">
-            <input type='checkbox' id='view_control_visibility_checkbox'>
-            <span>Errors only</span>
+        <div class="sub_status_bar">
+            <span id="test_results_stats">><!-- JS generated --></span>
+            <span id="view_control_panel">
+                <!-- Put expand/collapse button first, as it changes width if clicked -->
+                <span id="view_control_expand_or_collapse">[<!-- Use as a button -->
+                    <!-- The string should be synced with the JS script -->
+                    <a id="view_control_expand_or_collapse_button">expand all</a>
+                ]</span>
+                <span class="view_control_panel_vertial_divider"></span>
+                <input type="checkbox" id="view_control_visibility_checkbox_successes" checked>
+                successes
+                <input type="checkbox" id="view_control_visibility_checkbox_errors" checked>
+                errors
+            </span>
         </div>
         <div class="entries_view_html">{entries_view_html}</div>
         <div class="html_footer">@leedehai</div>

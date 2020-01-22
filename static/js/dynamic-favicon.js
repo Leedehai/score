@@ -1,3 +1,5 @@
+// @ts-nocheck
+
 // Set favicon based on browser light/dark theme.
 const matcher = window.matchMedia('(prefers-color-scheme: dark)');
 function onUpdate() {
