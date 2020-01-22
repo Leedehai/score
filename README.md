@@ -11,7 +11,7 @@ Utilities to run tests.
 
 ## Files
 
-### [runtest.py](runtest.py)
+### [score_run.py](score_run.py)
 
 Run tests in parallel with designated timer.
 - loads from a JSON file tests' metadata: programs, args, timeout values, expected exit and stdout, ...
@@ -25,7 +25,7 @@ Run tests in parallel with designated timer.
 - takes flakiness into account
 
 ```sh
-usage: runtest.py [-h] [--timer TIMER] [--meta PATH] [--paths T [T ...]]
+usage: score_run.py [-h] [--timer TIMER] [--meta PATH] [--paths T [T ...]]
                   [-g DIR] [-n N] [-1] [-s S] [--flakiness DIR] [-w]
                   [--only "+0,-1,+5.."] [--docs]
 
@@ -48,7 +48,7 @@ optional arguments:
 Unless '--docs' is given, exactly one of '--paths' and '--meta' is needed.
 ```
 
-The timer program can be compiled from [ctimer](https://github.com/Leedehai/ctimer), written in C++ with POSIX system calls, another project of mine. Of course, you can use your own timer program instead (e.g. one that can run on Windows), as long as its commandline interface meets what is laid out in `./runtest.py --docs`. 
+The timer program can be compiled from [ctimer](https://github.com/Leedehai/ctimer), written in C++ with POSIX system calls, another project of mine. Of course, you can use your own timer program instead (e.g. one that can run on Windows), as long as its commandline interface meets what is laid out in `./score_run.py --docs`. 
 
 #### Testing
 Sanity test, which means the test is not complete.
@@ -60,7 +60,7 @@ sanity/check-runtest.sh
 #### Examples
 ```sh
 # run tests that are all good
-./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1
+./score_run.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1
 # view the log as text file
 vim logs1/log.json
 # clear up
@@ -69,7 +69,7 @@ rm -rf logs1
 
 ```sh
 # run tests, some of them being bad
-./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2
+./score_run.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2
 # view the log as text file
 vim logs2/log.json
 # view the diff files in browser (their paths are found in the log)
@@ -84,7 +84,7 @@ rm -rf logs2
 
 ```sh
 # write golden files (expected stdout), with some tests being bad
-./runtest.py --timer mocks/timer.py --meta mocks/meta-write-golden.json -g logs3 -w
+./score_run.py --timer mocks/timer.py --meta mocks/meta-write-golden.json -g logs3 -w
 # clear up
 rm -rf logs3 && rm -f delete_me.gold
 ```
@@ -105,11 +105,11 @@ optional arguments:
   -h, --help         show this help message and exit
   --title TITLE      title of tests, default: 'Tests'
   --timer PROG       path to the timer program used to run the tests
-  --log LOG          path to the master log, written by runtest.py
+  --log LOG          path to the master log, written by score_run.py
   --to-dir NEW_PATH  directory to write results (if the directory already
                      exits, it will be replaced), default: ./html
 
-For requirements of the timer and log file: see runtest.py --docs
+For requirements of the timer and log file: see score_run.py --docs
 ```
 
 The resulting website contains a expandable list of results, like this:
@@ -119,7 +119,7 @@ The resulting website contains a expandable list of results, like this:
 
 #### Examples
 ```sh
-# Using runtest.py's examples above
+# Using score_run.py's examples above
 ./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html
 ./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html
 ```
@@ -130,7 +130,7 @@ The resulting website contains a expandable list of results, like this:
 
 ### [diff_html_str.py](diff_html_str.py)
 
-Returns a valid HTML string that contains a table to render the diff view. Used by [runtest.py](runtest.py).
+Returns a valid HTML string that contains a table to render the diff view. Used by [score_run.py](score_run.py).
 > The HTML format is [diff.html](diff.html) - the placeholders are `%s` instead of `{slot_name}` because escaping `{` and `}` distorts the CSS definition statements.
 
 ###### EOF

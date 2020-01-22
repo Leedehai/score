@@ -2,6 +2,6 @@
 # Copyright: see README and LICENSE under the project root directory.
 # Author: @Leedehai
 #
-# File: check-runtest.py
+# File: check-score_run.py
 # ---------------------------
-# Invoke runtest.py.
+# Invoke score_run.py.

@@ -31,6 +31,7 @@ Array.from(document.getElementsByClassName('test_entry_button')).forEach(button 
     let entryThemeColor = '';
     let statusSvgIcon = null;
     let statusTextMsg = '';
+    let statusClassName = '';
     if (errorAttemptCount === 0) { // All attempts are definite successes
         entryThemeColor = '#4caf50'; // Green
         statusSvgIcon = makeSvgPath({
@@ -38,6 +39,7 @@ Array.from(document.getElementsByClassName('test_entry_button')).forEach(button 
             path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
         });
         statusTextMsg = 'success';
+        statusClassName = 'status_success';
         button.classList.add('entry_button_passed_test');
         entryExpansion.classList.add('entry_expansion_passed_test');
     } else if (allErrorsAreKnownFlaky) { // Treat the test status as success
@@ -47,6 +49,7 @@ Array.from(document.getElementsByClassName('test_entry_button')).forEach(button 
             path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
         });
         statusTextMsg = 'all errors are known as flaky';
+        statusClassName = 'status_errs_are_flaky';
         button.classList.add('entry_button_erred_but_flaky_test');
         entryExpansion.classList.add('entry_expansion_erred_but_flaky_test');
     } else { // Has definite error
@@ -56,9 +59,12 @@ Array.from(document.getElementsByClassName('test_entry_button')).forEach(button 
             path: 'M1 1 L14 14 M14 1 L1 14', // Cross mark
         });
         statusTextMsg = 'error';
+        statusClassName = 'status_error';
         button.classList.add('entry_button_erred_test');
         entryExpansion.classList.add('entry_expansion_erred_test');
     }
+    button.classList.add(statusClassName);
+    entryExpansion.classList.add(statusClassName);
     button.style.borderLeftStyle = 'solid';
     button.style.borderLeftWidth = '5px';
     button.style.borderLeftColor = entryThemeColor;
@@ -165,3 +171,19 @@ function makeSvgPath({ width, height, path, color }) {
     svg.appendChild(svgPath);
     return svg;
 }
+
+const checkboxErrorsOnly = document.body.querySelector(
+    'input#view_control_visibility_checkbox');
+checkboxErrorsOnly.addEventListener('click', () => {
+    if (checkboxErrorsOnly.checked) {
+        document.querySelectorAll('.test_entry_button.status_success,'
+            + '.test_entry_expansion.status_success').forEach(e => {
+            e.style.display = 'none';
+        });
+    } else {
+        document.querySelectorAll('.test_entry_button,'
+            + '.test_entry_expansion').forEach(e => {
+            e.style.display = null;
+        });
+    }
+});

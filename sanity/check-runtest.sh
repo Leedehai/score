@@ -8,8 +8,8 @@ if [ ! -d sanity ]; then
 fi
 
 printf "\033[32;1m# run tests that are all good\n\033[0m"
-printf "\033[32;1m./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1\n\033[0m"
-./runtest.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1 ; exit_code=$?
+printf "\033[32;1m./score_run.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1\n\033[0m"
+./score_run.py --timer mocks/timer.py --meta mocks/meta-all-good.json -g logs1 ; exit_code=$?
 
 if [ $exit_code -ne 0 ]; then
     printf "\033[31;1mexit code is not 0\n\033[0m"
@@ -43,8 +43,8 @@ fi
 
 # run tests, some of them being bad
 printf "\033[32;1m\n# run tests, some of them being bad\n\033[0m"
-printf "\033[32;1m./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2\n\033[0m"
-./runtest.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2 ; exit_code=$?
+printf "\033[32;1m./score_run.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2\n\033[0m"
+./score_run.py --timer mocks/timer.py --meta mocks/meta-with-error.json -g logs2 ; exit_code=$?
 
 if [ $exit_code -ne 1 ]; then
     printf "\033[31;1mexit code is not 1\n\033[0m"
@@ -77,9 +77,9 @@ if [ ! -f logs2/html/view_log.html ] ; then
 fi
 
 printf "\033[32;1m\n# write golden files (expected stdout), with some tests being bad\n\033[0m"
-printf "\033[32;1m./runtest.py --timer mocks/timer.py --meta mocks/meta-write-golden.json -g logs3 -w\n\033[0m"
+printf "\033[32;1m./score_run.py --timer mocks/timer.py --meta mocks/meta-write-golden.json -g logs3 -w\n\033[0m"
 if [ -f delete_me.gold ] ; then rm delete_me.gold; fi
-./runtest.py --timer mocks/timer.py --meta mocks/meta-write-golden.json -g logs3 -w <<< "y" ; exit_code=$?
+./score_run.py --timer mocks/timer.py --meta mocks/meta-write-golden.json -g logs3 -w <<< "y" ; exit_code=$?
 
 if [ $exit_code -ne 1 ]; then
     printf "\033[31;1mexit code should be 1\n\033[0m"

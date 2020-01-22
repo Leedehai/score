@@ -2,7 +2,7 @@
 # Copyright: see README and LICENSE under the project root directory.
 # Author: @Leedehai
 #
-# File: runtest.py
+# File: score_run.py
 # ---------------------------
 # Run tests with timer, logging, and HTML diff view (if any).
 # For more information, see README.md.

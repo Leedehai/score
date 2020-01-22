@@ -272,14 +272,14 @@ def generate_web_view(
 def main():
     parser = argparse.ArgumentParser(
         description = "Static site generator for test results",
-        epilog = "For requirements of the timer and log file: see runtest.py --docs"
+        epilog = "For requirements of the timer and log file: see score_run.py --docs"
     )
     parser.add_argument("--title", type = str, default = "Tests",
                         help="title of tests, default: 'Tests'")
     parser.add_argument("--timer", metavar = "PROG", type = str, required = True,
                         help="path to the timer program used to run the tests")
     parser.add_argument("--log", metavar = "LOG", type = str, required = True,
-                        help="path to the master log, written by runtest.py")
+                        help="path to the master log, written by score_run.py")
     parser.add_argument("--to-dir", metavar = "NEW_PATH", type = str, default = "html",
                         help="directory to write results (if the directory already "
                              "exits, it will be replaced), default: ./html")

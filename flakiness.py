@@ -9,7 +9,7 @@
 import sys, os
 import re
 
-EXPECTED_ERRS = { # Sync with EXPLANATION_STRING in runtest.py
+EXPECTED_ERRS = { # Sync with EXPLANATION_STRING in score_run.py
     "WrongExitCode", "Timeout", "Signal", "StdoutDiff", "Others"
 }
 def _valid_expected_errs(s):

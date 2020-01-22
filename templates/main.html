@@ -28,19 +28,8 @@
             <span class="master_log_link"><a href="{master_log}" target="_blank">raw log</a></span>
         </div>
         <div class="view_control_panel">
-            <span class="view_control_visibility_title">Visibility</span>
-            <span class="view_control_visibility_choice">
-                <input type="radio" id="show_all" checked>
-                <label for="show_all">all</label>
-            </span>
-            <span class="view_control_visibility_choice">
-                <input type="radio" id="show_all" checked>
-                <label for="show_all">errors</label>
-            </span>
-            <span class="view_control_visibility_choice">
-                <input type="radio" id="show_all" checked>
-                <label for="show_all">flakiness</label>
-            </span>
+            <input type='checkbox' id='view_control_visibility_checkbox'>
+            <span>Errors only</span>
         </div>
         <div class="entries_view_html">{entries_view_html}</div>
         <div class="html_footer">@leedehai</div>

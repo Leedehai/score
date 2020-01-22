@@ -7,8 +7,8 @@ This is a sanity check, which means it does not cover all code paths; just the i
 For help:
 ```sh
 # working directory is testtools/
-# test runtest.py
-tests/check-runtest.py --help
+# test score_run.py
+tests/check-score_run.py --help
 ```
 
 ###### EOF
