@@ -129,3 +129,22 @@ body {
     right: 0;
     margin: 2px;
 }
+
+.disabled_cases {
+    margin-left: 12px;
+}
+
+.disabled_cases .disabled_cases_message {
+    font-family: Helvetica, sans-serif;
+    font-size: 12px;
+    color: #777777;
+    text-decoration: underline;
+}
+
+.disabled_cases .disabled_case_html {
+    font-family: Helvetica, sans-serif;
+    font-size: 10px;
+    color: #777777;
+    text-decoration: initial;
+    margin-left: 12px;
+}

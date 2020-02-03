@@ -1041,7 +1041,11 @@ def main():
     unique_count = len(metadata_list_3)
     for metadata in metadata_list_3:
         # case id is unique for every (path, args) combination
-        comb_id = compute_comb_id(metadata["path"], metadata["args"], metadata["envs"]) # str
+        comb_id = compute_comb_id(
+            prog = metadata["path"],
+            args = metadata["args"],
+            envs = metadata["envs"] if metadata["envs"] != None else {}
+        ) # str
         metadata["comb_id"] = comb_id # str
         metadata["flaky_errors"] = flakiness_dict.get(comb_id, []) # list of str
         for i in range(args.repeat): # if args.repeat != 1, then args.write_golden is False

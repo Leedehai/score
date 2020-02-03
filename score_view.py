@@ -87,6 +87,11 @@ def _timeline_svg_html(
                 x2 = x_coords[2], x3 = x_coords[3],
             )
 
+def _disabled_case_html(disabled_cases: List[dict]):
+    return "<pre class='disabled_case_html'>{disabled_case_list}</pre>".format(
+        disabled_case_list = '\n'.join(e["desc"] for e in disabled_cases)
+    )
+
 def _populate_test_results_table(
     results: List[dict], start_time_min: float, whole_time: float) -> str:
     """
@@ -193,7 +198,7 @@ def _populate_html_template(
     master_log_path: Path, error_task_count: int,
     sorted_test_results: List[dict], timer_program: str,
     start_time_min: float, whole_time: float,
-    working_directory: Optional[str] = None) -> str:
+    disabled_cases: List[dict], working_directory: Optional[str] = None) -> str:
     """Populate the HTML templates, starting from the main template"""
     main_html = MAIN_HTML_TEMPLATE.format(
         test_title = test_title,
@@ -206,6 +211,10 @@ def _populate_html_template(
             sorted_test_results = sorted_test_results, timer_program = timer_program,
             start_time_min = start_time_min, whole_time = whole_time,
             working_directory = working_directory,
+        ),
+        message_disabled_case_count = "Disabled tests: %d" % len(disabled_cases),
+        disabled_case_html = _disabled_case_html(
+            disabled_cases = sorted(disabled_cases, key = lambda e : e["desc"]),
         ),
     )
     return main_html
@@ -236,7 +245,7 @@ def _generate_web_view_impl(
         master_log_path = master_log_path, error_task_count = error_task_count,
         sorted_test_results = sorted_test_results, timer_program = timer_program,
         start_time_min = start_time_min, whole_time = end_time_max - start_time_min,
-        working_directory = working_directory,
+        disabled_cases = disabled_cases, working_directory = working_directory,
     )
     with Path(html_dir, OUT_HTML_BASENAME).open('w') as f:
         f.write(html_str)
