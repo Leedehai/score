@@ -121,7 +121,7 @@ def generate_result_dict(
 # handle nasty Python's str v.s. bytes v.s. unicode mess
 def ensure_str(s) -> str:
     if type(s) == bytes:
-        return s.decode()
+        return s.decode(errors="backslashreplace")
     elif type(s) == str:
         return s
     raise TypeError("param 's' is not bytes or str")
