@@ -184,22 +184,6 @@ const controlledByShowErrors = document.body.querySelectorAll([
     '.test_entry_button.status_error',
     '.test_entry_expansion.status_error',
 ].join(','));
-checkboxShowErrors.addEventListener('click', () => {
-    controlledByShowErrors.forEach(e => {
-        e.style.display = checkboxShowErrors.checked ? null : 'none';
-     });
-});
-checkboxShowErrors.addEventListener('mouseenter', () => {
-    controlledByShowErrors.forEach(e => {
-        e.style.opacity = 0.5;
-     });
-});
-checkboxShowErrors.addEventListener('mouseout', () => {
-    controlledByShowErrors.forEach(e => {
-        e.style.opacity = null;
-     });
-});
-
 const checkboxShowSuccesses = document.body.querySelector(
     'input#view_control_visibility_checkbox_successes');
 const controlledByShowSuccesses = document.body.querySelectorAll([
@@ -208,20 +192,31 @@ const controlledByShowSuccesses = document.body.querySelectorAll([
     '.test_entry_button.status_pseudo_success',
     '.test_entry_expansion.status_pseudo_success',
 ].join(','));
+const displaySetter = /** @type {boolean} */ condition => element => {
+    element.style.display = condition ? null : 'none';
+};
+const opacitySetter = /** @type {number|null} */ opacity => element => {
+    element.style.opacity = opacity;
+};
+checkboxShowErrors.addEventListener('click', () => {
+    controlledByShowErrors.forEach(
+        displaySetter(checkboxShowErrors.checked));
+});
+checkboxShowErrors.addEventListener('mouseenter', () => {
+    controlledByShowErrors.forEach(opacitySetter(0.5));
+});
+checkboxShowErrors.addEventListener('mouseout', () => {
+    controlledByShowErrors.forEach(opacitySetter(null));
+});
 checkboxShowSuccesses.addEventListener('click', () => {
-    controlledByShowSuccesses.forEach(e => {
-        e.style.display = checkboxShowSuccesses.checked ? null : 'none';
-     });
+    controlledByShowSuccesses.forEach(
+        displaySetter(checkboxShowSuccesses.checked));
 });
 checkboxShowSuccesses.addEventListener('mouseenter', () => {
-    controlledByShowSuccesses.forEach(e => {
-        e.style.opacity = 0.5;
-     });
+    controlledByShowSuccesses.forEach(opacitySetter(0.5));
 });
 checkboxShowSuccesses.addEventListener('mouseout', () => {
-    controlledByShowSuccesses.forEach(e => {
-        e.style.opacity = null;
-     });
+    controlledByShowSuccesses.forEach(opacitySetter(null));
 });
 
 const buttonExpandOrCollapseAll = document.body.querySelector(

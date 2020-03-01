@@ -80,13 +80,8 @@ body {
 
 .sub_status_bar #test_results_stats {
     padding-top: 3px;
-    visibility: hidden;
     position: absolute;
     left: 12px;
-}
-
-.sub_status_bar:hover #test_results_stats {
-    visibility: visible;
 }
 
 .sub_status_bar #view_control_panel {
