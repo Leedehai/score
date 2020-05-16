@@ -13,6 +13,7 @@ import argparse
 import datetime
 import itertools
 import json
+import re
 import shutil
 import statistics
 from pathlib import Path
@@ -35,17 +36,22 @@ class TableRowBuilder:
     def done(self) -> str:
         self.parts.append("</tr>")
         return "".join(self.parts)
-    def add_data_cell(self, any_data, class_name = None):
+    def add_data_cell(self, any_data, class_names = "", tooltip = None):
+        class_names = ("tooltip_owner " if tooltip else "") + class_names
+        cell_inner_html = str(any_data)
+        if tooltip:
+            cell_inner_html += (" <span class=\"tooltip_text\">%s</span>" % tooltip)
         self.parts.append("<{0}{2}>{1}</{0}>".format(
-            self.type, str(any_data),
-            (" class=\"%s\"" % class_name) if class_name else ""
+            self.type, cell_inner_html,
+            (" class=\"%s\"" % class_names) if class_names else ""
         ))
         return self
-    def add_href_cell(self, url: str, title: str, comment: str):
+    def add_href_cell(self, url: str, text: str, comment: str, class_names = ""):
         self.parts.append("<{0}>"
-            "<a href=\"{1}\" target=\"_blank\">{2}</a>"
+            "<a href=\"{1}\" target=\"_blank\" {4}>{2}</a>"
             "&nbsp;<span class=\"comment\">({3})</span></{0}>".format(
-            self.type, url, title, comment)
+            self.type, url, text, comment,
+            (" class=\"%s\"" % class_names) if class_names else "")
         )
         return self
 
@@ -93,7 +99,7 @@ def _disabled_case_html(disabled_cases: List[dict]):
     )
 
 def _populate_test_results_table(
-    results: List[dict], start_time_min: float, whole_time: float) -> str:
+    results: List[dict], start_time_min: float, whole_time: float, html_dir: str) -> str:
     """
     Generate an HTML table for all results for one test.
     results: task results for this one test, length == the test's repeat times.
@@ -105,21 +111,22 @@ def _populate_test_results_table(
         TableRowBuilder("th")
             .add_data_cell("#")
             .add_data_cell("result")
-            .add_data_cell("runtime")
-            .add_data_cell("exit")
+            .add_data_cell("runtime", tooltip="time on processor")
+            .add_data_cell("exit", tooltip="how program exited")
             .add_data_cell("exit ok")
             .add_data_cell("stdout")
             .add_data_cell("stdout diff")
             .add_data_cell("stdout ok")
-            .add_data_cell("timeline")
+            .add_data_cell("timeline", tooltip="start/end time vs all tests")
             .done()
     )
+    file_size_str = lambda size : "0" if size == 0 else ("%.2f" % size)
     for result in results:
         half_backed_row = (TableRowBuilder("td")
             .add_data_cell(result["repeat"]["count"])
             .add_data_cell(
                 _result_cell_ternary(result, "good", "bad", "bad, flaky"), # content
-                _result_cell_ternary(result, "success", "error", "error_but_flaky"), # class name
+                class_names = _result_cell_ternary(result, "success", "error", "error_but_flaky"),
             ) # result
             .add_data_cell(
                 "%d ms" % result["times_ms"]["proc"], # runtime (processor time)
@@ -127,15 +134,20 @@ def _populate_test_results_table(
             .add_data_cell(_searialize_exit_object(result["exit"]["real"])) # exit
             .add_data_cell(str(result["exit"]["ok"]).lower()) # exit ok
             .add_href_cell( # stdout
-                result["stdout"]["actual_file"], "stdout", "%.2f KB" % (
-                    os.path.getsize(result["stdout"]["actual_file"]) / 1024.0)
+                os.path.relpath(result["stdout"]["actual_file"], html_dir),
+                text="stdout",
+                comment="%s KB" % file_size_str(
+                    os.path.getsize(result["stdout"]["actual_file"]) / 1024.0),
+                class_names="link_stdout"
             )
         )
         if result["stdout"]["ok"]:
             half_backed_row = half_backed_row.add_data_cell("-") # stdout diff
         else:
             half_backed_row = half_backed_row.add_href_cell( # stdout diff
-                result["stdout"]["diff_file"], "diff", "%.2f KB" % (
+                os.path.relpath(result["stdout"]["diff_file"], html_dir),
+                text="diff",
+                comment="%s KB" % file_size_str(
                     os.path.getsize(result["stdout"]["diff_file"]) / 1024.0)
             )
         row_list.append(
@@ -149,7 +161,7 @@ def _populate_test_results_table(
 
 def _populate_entries_view(
     *, sorted_test_results: List[dict], timer_program: str,
-    start_time_min: float, whole_time: float,
+    start_time_min: float, whole_time: float, html_dir: str,
     working_directory: Optional[str] = None) -> str:
     """
     Generate HTML pice for each entry. Each entry is a test, potentially
@@ -175,8 +187,10 @@ def _populate_entries_view(
             e["times_ms"]["proc"] for e in results_for_one_test
         )
         results_table_html = _populate_test_results_table(
-            results_for_one_test, start_time_min, whole_time)
+            results_for_one_test, start_time_min, whole_time, html_dir)
         test_entry_html = ENTRY_PIECE_TEMPLATE.format(
+            test_description_with_ellipse_if_necessary = score_utils.ellipse_str(
+                60, results_for_one_test[0]["desc"]),
             test_description = results_for_one_test[0]["desc"],
             command_invocation = command_invocation,
             expected_exit = _searialize_exit_object(
@@ -210,7 +224,7 @@ def _populate_html_template(
         entries_view_html = _populate_entries_view(
             sorted_test_results = sorted_test_results, timer_program = timer_program,
             start_time_min = start_time_min, whole_time = whole_time,
-            working_directory = working_directory,
+            html_dir=html_dir, working_directory = working_directory,
         ),
         message_disabled_case_count = "Disabled tests: %d" % len(disabled_cases),
         disabled_case_html = _disabled_case_html(
@@ -248,7 +262,11 @@ def _generate_web_view_impl(
         disabled_cases = disabled_cases, working_directory = working_directory,
     )
     with Path(html_dir, OUT_HTML_BASENAME).open('w') as f:
-        f.write(html_str)
+        f.write(minimize_html(html_str))
+
+def minimize_html(s):
+    # replace repeated blanks (not '\n', in case a "//" invalidates the next line)
+    return re.sub(r" {2,}", " ", s) # Back-burner: JS, comments in HTML/JS, etc.
 
 # export
 def generate_web_view(

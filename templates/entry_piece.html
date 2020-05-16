@@ -7,12 +7,16 @@
     because the data aren't to be filled using JavaScript
     at runtime, diminishing implementation efficiency gain.
 -->
-<button type="button" class="test_entry_button">
+<button type="button" class="test_entry_button tooltip_owner">
     <span id="status_icon"><!-- JS generated --></span>
-    <span id="test_description">{test_description}</span>
+    <span id="test_description">
+      {test_description_with_ellipse_if_necessary}
+    </span>
     <span id="status_message"><!-- JS generated --></span>
+    <span class="tooltip_text">{test_description}</span>
 </button>
-<div class="test_entry_expansion">
+<div class="test_entry_detail">
+    <div class="detail_test_description">{test_description}</div>
     <a class="invocation_button">command invocation</a> <!-- Use as a button -->
     <a class="invocation_copy_button">copy</a> <!-- Use as a button -->
     <div class="invocation_expansion">
@@ -20,12 +24,22 @@
     </div>
     <div class="meta_table_area">
         <table class="meta_info">
-            <tr title="Normal return, signal, timeout, etc.">
-                <td>expected exit:</td>
+            <tr>
+                <td>
+                  <span class="tooltip_owner">
+                    <span class="tooltip_text">return code, signal code, timeout, etc.</span>
+                    expected exit:
+                  </span>
+                </td>
                 <td><span>{expected_exit}</span></td>
             </tr>
-            <tr title="If a golden file is given, compare the actual stdout with its content">
-                <td>expected stdout:</td>
+            <tr>
+                <td>
+                  <span class="tooltip_owner">
+                    <span class="tooltip_text">if given, compare it with actual stdout</span>
+                    expected stdout:
+                  </span>
+                </td>
                 <td>
                     <span class="golden_file_link_span">
                         <!-- If there's no golden file, remove this -->
@@ -35,21 +49,36 @@
                     </span>
                 </td>
             </tr>
-            <tr title="Allowed maximum processor time">
-                <td>cpu timeout:</td>
+            <tr>
+                <td>
+                  <span class="tooltip_owner">
+                    <span class="tooltip_text">allowed max. time on processor</span>
+                    proc. timeout:
+                  </span>
+                </td>
                 <td><span id="known_flaky">{timeout_ms}</span></td>
             </tr>
-            <tr title="If one of these errors occurs, ignore the error">
-                <td>known flaky:</td>
+            <tr>
+                <td>
+                  <span class="tooltip_owner">
+                    <span class="tooltip_text">false: not flaky; otherwise, ignore given errors</span>
+                    known flaky:
+                  </span>
+                </td>
                 <td><span id="known_flaky">{known_flaky}</span></td>
             </tr>
         </table>
         <table class="aggregate_results_info">
-            <tr title="Average processor time, not wall time">
-                <td>avg. runtime:</td>
+            <tr>
+                <td>
+                  <span class="tooltip_owner">
+                    <span class="tooltip_text">average time on processor, not wall time</span>
+                    avg. runtime:
+                  </span>
+                </td>
                 <td><span>{average_runtime} ms</span></td>
             </tr>
-            <tr id="success_info" title="Count of definite successful attempts">
+            <tr id="success_info">
                 <td>success:</td>
                 <td>
                     <span id="success_count">{success_count}</span>

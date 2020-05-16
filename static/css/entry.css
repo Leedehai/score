@@ -13,6 +13,37 @@
     position: relative;
 }
 
+.tooltip_owner {
+  position: relative;
+}
+
+.tooltip_owner:hover {
+  text-decoration: dotted underline #aaa;
+}
+
+.tooltip_owner:hover .tooltip_text {
+  visibility: visible;
+  opacity: 1;
+}
+
+.tooltip_owner .tooltip_text {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background-color: #22222299;
+  color: #fff;
+  text-align: left;
+  font-family: 'Source Sans Pro', Helvetica, sans-serif; /* override other fonts */
+  font-weight: normal; /* override other weights */
+  border-radius: 2px;
+  padding: 2px 5px;
+  position: absolute;
+  z-index: 1;
+  width: max-content;
+  left: 10%;
+  top: 100%; /* appear at bottom */
+}
+
 .test_entry_button #status_icon {
     position: relative;
     top: 1px;
@@ -26,17 +57,24 @@
     visibility: hidden;
 }
 
-.test_entry_expansion {
+.test_entry_detail {
     background-color: transparent;
     max-height: 0;
     padding: 0px 8px;
     overflow: hidden;
-    transition: max-height 0.3s ease-out;
     font-family: 'Source Sans Pro', Helvetica, sans-serif;
     font-size: 14px;
 }
 
-.test_entry_expansion .meta_table_area table {
+.test_entry_detail .detail_test_description {
+  margin-top: 6px;
+  margin-left: 10px;
+  margin-bottom: 10px;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.test_entry_detail .meta_table_area table {
     margin-right: 5em;
     float: left; /* Make tables side-by-side */
     padding: 0px 8px;
@@ -44,15 +82,15 @@
     font-size: 14px;
 }
 
-.test_entry_expansion .meta_table_area table tr {
+.test_entry_detail .meta_table_area table tr {
     padding-left: 1px;
 }
 
-.test_entry_expansion .meta_table_area table tr td {
+.test_entry_detail .meta_table_area table tr td {
     width: 10em;
 }
 
-.test_entry_expansion .golden_file_link_span a {
+.test_entry_detail .golden_file_link_span a {
     font-size: 14px;
     color: RoyalBlue;
     text-decoration: underline;
@@ -97,12 +135,12 @@
     border-color: LightSteelBlue;
 }
 
-.test_entry_expanded,
+.test_entry_detail_displayed,
 .test_entry_button:hover {
     background-color: #eeeeee;
 }
 
-.test_entry_expanded #status_message,
+.test_entry_detail_displayed #status_message,
 .test_entry_button:hover #status_message {
     visibility: visible;
 }
@@ -117,11 +155,11 @@
     border-bottom: 1px solid #eeeeee;
 }
 
-.test_entry_expansion .results_table_area {
+.test_entry_detail .results_table_area {
     margin-top: 0.5em;
 }
 
-.test_entry_expansion .results_table_area table {
+.test_entry_detail .results_table_area table {
     padding: 0px 8px;
     font-family: 'Source Sans Pro', Helvetica, sans-serif;
     font-size: 14px;
@@ -129,48 +167,59 @@
     border-collapse: collapse;
 }
 
-.test_entry_expansion .results_table_area table tr td .comment {
+.test_entry_detail .results_table_area table tr td .comment {
     font-size: 10px;
     color: #aaaaaa;
     text-decoration: none;
 }
 
-.test_entry_expansion .results_table_area table tr:hover td {
+.test_entry_detail .results_table_area table tr:hover td {
     background-color: #fafafa;
 }
 
-.test_entry_expansion .results_table_area table tr th {
+.test_entry_detail .results_table_area table tr th {
     font-weight: bold;
 }
 
-.test_entry_expansion .results_table_area table tr th,
-.test_entry_expansion .results_table_area table tr td {
+.test_entry_detail .results_table_area table tr th,
+.test_entry_detail .results_table_area table tr td {
     width: 7em;
 }
 
-.test_entry_expansion .results_table_area table tr th:nth-child(1),
-.test_entry_expansion .results_table_area table tr td:nth-child(1) {
+.test_entry_detail .results_table_area table tr th:nth-child(1),
+.test_entry_detail .results_table_area table tr td:nth-child(1) {
     width: 2em;
 }
 
-.test_entry_expansion .results_table_area table tr th:nth-last-child(1),
-.test_entry_expansion .results_table_area table tr td:nth-last-child(1) {
+.test_entry_detail .results_table_area table tr th:nth-last-child(1),
+.test_entry_detail .results_table_area table tr td:nth-last-child(1) {
     width: 12em;
 }
 
-.test_entry_expansion .results_table_area table tr td a {
+.test_entry_detail .results_table_area table tr td a {
     font-size: 14px;
     color: RoyalBlue;
 }
 
-.test_entry_expansion .results_table_area .success {
+.test_entry_detail .results_table_area .success {
     color: #4caf50; /* Also see test-entries.js */
 }
 
-.test_entry_expansion .results_table_area .error {
+.test_entry_detail .results_table_area .error {
     color: #f03f50; /* Also see test-entries.js */
 }
 
-.test_entry_expansion .results_table_area .error_but_flaky {
+.test_entry_detail .results_table_area .error_but_flaky {
     color: #9932cc; /* Also see test-entries.js */
+}
+
+.test_stdout_iframe {
+    margin-top: 1em;
+    border: solid 1px gray;
+    width: 90%;
+    height: 50%;
+}
+
+.link_stdout_open {
+  background-color: #b1e9f1;
 }

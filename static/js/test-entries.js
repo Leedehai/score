@@ -1,75 +1,100 @@
 // @ts-nocheck
 
-let test_stats = { total: 0, success: 0, error: 0, error_but_flaky: 0 };
+let gTestStats = { total: 0, success: 0, error: 0, error_but_flaky: 0 };
+let gSelectedButton = /* {?HtmlElement} */null;
+let gDetailPanelPlaceholder = (function() {
+  const div = document.createElement('div');
+  div.style = 'position: relative; height: 200px';
+  span = document.createElement('span');
+  span.style = '\
+    position: absolute; left: 38%; top: 10%; \
+    font-family: Helvetica, sans-serif; font-size: 16px; font-weight: bold; \
+    text-align: center; \
+    color: #aaa; \
+  ';
+  span.innerText = 'Click a test to view details.';
+  div.appendChild(span);
+  return div;
+})();
+const gDetailPanel = document.querySelector('.entry_details_view');
+replaceView(gDetailPanel, gDetailPanelPlaceholder);
+
 Array.from(document.getElementsByClassName('test_entry_button')).forEach(button => {
-    const entryExpansion = getEntryExpansionFromEntryButton(button);
+    const entryDetail = getEntryDetailFromEntryButton(button);
     button.addEventListener('click', () => {
-        button.classList.toggle('test_entry_expanded');
-        if (entryExpansion.style.maxHeight) {
-            setEntryExpansionState(entryExpansion, false);
+        const clickedOnSelectedButton = window.gSelectedButton === button;
+        if (clickedOnSelectedButton) {
+            button.classList.remove('test_entry_detail_displayed');
+            window.gSelectedButton = null;
+            replaceView(gDetailPanel, gDetailPanelPlaceholder);
         } else {
-            setEntryExpansionState(entryExpansion, true);
+            if (window.gSelectedButton) {
+                window.gSelectedButton.classList.remove('test_entry_detail_displayed');
+            }
+            window.gSelectedButton = button;
+            button.classList.add('test_entry_detail_displayed');
+            replaceView(gDetailPanel, makeEntryDetailView(entryDetail));
         }
     });
 
-    const successCountSpan = entryExpansion.querySelector('span#success_count');
+    const successCountSpan = entryDetail.querySelector('span#success_count');
     const successCount = Number(successCountSpan.textContent);
-    const attemptCountSpan = entryExpansion.querySelector('span#attempt_count');
+    const attemptCountSpan = entryDetail.querySelector('span#attempt_count');
     const attemptCount = Number(attemptCountSpan.textContent);
-    const flakyErrorAttemptCountSpan = entryExpansion.querySelector('span#flaky_error_count');
+    const flakyErrorAttemptCountSpan = entryDetail.querySelector('span#flaky_error_count');
     const flakyErrorAttemptCount = Number(flakyErrorAttemptCountSpan.textContent);
     const errorAttemptCount = attemptCount - successCount;
     const allErrorsAreKnownFlaky = errorAttemptCount > 0 && flakyErrorAttemptCount === errorAttemptCount;
 
-    const pluralSuffixSpan = entryExpansion.querySelector('span#plural_suffix');
+    const pluralSuffixSpan = entryDetail.querySelector('span#plural_suffix');
     pluralSuffixSpan.textContent = attemptCount > 1 ? 's' : '';
 
     let entryThemeColor = '';
     let statusSvgIcon = null;
     let statusTextMsg = '';
     let statusClassName = '';
-    test_stats.total += 1;
+    gTestStats.total += 1;
     if (errorAttemptCount === 0) { // All attempts are definite successes
         entryThemeColor = '#4caf50'; // Green
         statusSvgIcon = makeSvgPath({
             width: 15, height: 15, color: entryThemeColor,
             path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
         });
-        test_stats.success += 1;
+        gTestStats.success += 1;
         statusTextMsg = 'success';
         statusClassName = 'status_success';
         button.classList.add('entry_button_passed_test');
-        entryExpansion.classList.add('entry_expansion_passed_test');
+        entryDetail.classList.add('entry_detail_passed_test');
     } else if (allErrorsAreKnownFlaky) { // Treat the test status as success
         entryThemeColor = '#9932cc'; // Purple
         statusSvgIcon = makeSvgPath({
             width: 15, height: 15, color: entryThemeColor,
             path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
         });
-        test_stats.error_but_flaky += 1;
+        gTestStats.error_but_flaky += 1;
         statusTextMsg = 'all errors are known as flaky';
         statusClassName = 'status_pseudo_success';
         button.classList.add('entry_button_erred_but_flaky_test');
-        entryExpansion.classList.add('entry_expansion_erred_but_flaky_test');
+        entryDetail.classList.add('entry_detail_erred_but_flaky_test');
     } else { // Has definite error
         entryThemeColor = '#f03f50'; // Red
         statusSvgIcon = makeSvgPath({
             width: 15, height: 15, color: '#f03f50',
             path: 'M1 1 L14 14 M14 1 L1 14', // Cross mark
         });
-        test_stats.error += 1;
+        gTestStats.error += 1;
         statusTextMsg = 'error';
         statusClassName = 'status_error';
         button.classList.add('entry_button_erred_test');
-        entryExpansion.classList.add('entry_expansion_erred_test');
+        entryDetail.classList.add('entry_detail_erred_test');
     }
     button.classList.add(statusClassName);
-    entryExpansion.classList.add(statusClassName);
+    entryDetail.classList.add(statusClassName);
     button.style.borderLeftStyle = 'solid';
     button.style.borderLeftWidth = '5px';
     button.style.borderLeftColor = entryThemeColor;
 
-    const successInfoDiv = entryExpansion.querySelector('#success_info');
+    const successInfoDiv = entryDetail.querySelector('#success_info');
     successInfoDiv.style.color = entryThemeColor;
 
     const statusIconSpan = button.querySelector('span#status_icon');
@@ -80,10 +105,10 @@ Array.from(document.getElementsByClassName('test_entry_button')).forEach(button 
 
 // Set innerHTML rather than innerText or textContent, for '&emsp;'.
 document.body.querySelector("span#test_results_stats").innerHTML =
-    `Total ${test_stats.total}&emsp;&emsp;&emsp;`
-    + `Success ${test_stats.success}&emsp;&emsp;&emsp;`
-    + `Error ${test_stats.error}&emsp;&emsp;&emsp;`
-    + `Flaky ${test_stats.error_but_flaky}`;
+    `Total ${gTestStats.total}&emsp;&emsp;&emsp;`
+    + `Success ${gTestStats.success}&emsp;&emsp;&emsp;`
+    + `Error ${gTestStats.error}&emsp;&emsp;&emsp;`
+    + `Flaky ${gTestStats.error_but_flaky}`;
 
 Array.from(document.getElementsByClassName('golden_file_link_span')).forEach(e => {
     const anchorElement = e.querySelector('a#maybe_link');
@@ -91,32 +116,6 @@ Array.from(document.getElementsByClassName('golden_file_link_span')).forEach(e =
         e.removeChild(anchorElement);
         e.textContent = '(none)';
     }
-});
-
-Array.from(document.getElementsByClassName('invocation_button')).forEach(button => {
-    button.addEventListener('click', () => {
-        button.classList.toggle('invocation_expanded');
-        const copyButton = getInvocationCopyButtonFromInvocationButton(button);
-        const invocationExpansion = getInvocationExpansionFromInvocationButton(button);
-        if (invocationExpansion.style.maxHeight) {
-            invocationExpansion.style.maxHeight = null; // Not 0
-            copyButton.style.visibility = 'hidden';
-        } else {
-            const h = invocationExpansion.scrollHeight;
-            invocationExpansion.style.maxHeight = `${h}px`;
-            copyButton.style.visibility = 'visible';
-        }
-        const contentElement = invocationExpansion.querySelector('#invocation_content');
-        copyButton.addEventListener('click', () => {
-            copyToClipboard(contentElement);
-        });
-        copyButton.addEventListener('mousedown', () => {
-            contentElement.style.borderStyle = 'solid';
-        });
-        copyButton.addEventListener('mouseup', () => {
-            contentElement.style.borderStyle = 'none';
-        })
-    });
 });
 
 /**
@@ -182,15 +181,15 @@ const checkboxShowErrors = document.body.querySelector(
     'input#view_control_visibility_checkbox_errors');
 const controlledByShowErrors = document.body.querySelectorAll([
     '.test_entry_button.status_error',
-    '.test_entry_expansion.status_error',
+    '.test_entry_detail.status_error',
 ].join(','));
 const checkboxShowSuccesses = document.body.querySelector(
     'input#view_control_visibility_checkbox_successes');
 const controlledByShowSuccesses = document.body.querySelectorAll([
     '.test_entry_button.status_success',
-    '.test_entry_expansion.status_success',
+    '.test_entry_detail.status_success',
     '.test_entry_button.status_pseudo_success',
-    '.test_entry_expansion.status_pseudo_success',
+    '.test_entry_detail.status_pseudo_success',
 ].join(','));
 const displaySetter = /** @type {boolean} */ condition => element => {
     element.style.display = condition ? null : 'none';
@@ -219,53 +218,91 @@ checkboxShowSuccesses.addEventListener('mouseout', () => {
     controlledByShowSuccesses.forEach(opacitySetter(null));
 });
 
-const buttonExpandOrCollapseAll = document.body.querySelector(
-    'a#view_control_expand_or_collapse_button');
-buttonExpandOrCollapseAll.addEventListener('click', () => {
-    const strExpandAll = 'expand all'; // The string should be synced with the HTML
-    const strCollapseAll = 'collapse all';
-    const testEntryButtons = document.body.querySelectorAll('.test_entry_button');
-    const dT = 500 / (testEntryButtons.length + 1); // Milliseconds
-    if (buttonExpandOrCollapseAll.textContent === strExpandAll) {
-        testEntryButtons.forEach(async (button, idx) => {
-            await sleepTimeout((testEntryButtons.length - idx - 1) * dT);
-            button.classList.add('test_entry_expanded');
-            const entryExpansion = getEntryExpansionFromEntryButton(button);
-            setEntryExpansionState(entryExpansion, true);
-        });
-        buttonExpandOrCollapseAll.textContent = strCollapseAll;
-    } else { // strCollapseAll
-        testEntryButtons.forEach(async (button, idx) => {
-            await sleepTimeout(idx * dT);
-            button.classList.remove('test_entry_expanded');
-            const entryExpansion = getEntryExpansionFromEntryButton(button);
-            setEntryExpansionState(entryExpansion, false);
-        });
-        buttonExpandOrCollapseAll.textContent = strExpandAll;
+/**
+ * @param {!HTMLElement} entryDetail
+ * @return {!HTMLElement}
+ */
+function makeEntryDetailView(entryDetail) {
+    const invocationExpansion = entryDetail.querySelector('.invocation_expansion');
+    const fullHeight = entryDetail.scrollHeight + invocationExpansion.scrollHeight;
+    const cloned = entryDetail.cloneNode(/*deep=*/true);
+    const invocationButton = cloned.querySelector('.invocation_button');
+    if (invocationButton) {
+        AddInvocationExpansionListener(invocationButton);
     }
-});
+    const stdoutAnchor = cloned.querySelector('.link_stdout');
+    if (stdoutAnchor) {
+        console.log(gDetailPanel.width, gDetailPanel.height);
+        AddIframeOpenListener(stdoutAnchor);
+    }
+    cloned.style.maxHeight = fullHeight;
+    return cloned;
+}
 
 /**
- * Expand or collapse a test entry.
- * @param {!HTMLElement} entryExpansion
- * @param {boolean} doExpand true: expand, false: collapse
+ * @param {!HTMLElement} button Note: not necessarily an HTMLButtonElement
  */
-function setEntryExpansionState(entryExpansion, doExpand) {
-    const invocationExpansion = entryExpansion.querySelector('.invocation_expansion');
-    if (doExpand) {
-        const h = entryExpansion.scrollHeight + invocationExpansion.scrollHeight;
-        entryExpansion.style.maxHeight = `${h}px`;
-    } else {
-        entryExpansion.style.maxHeight = null; // Not 0
-        invocationExpansion.style.maxHeight = null; // Not 0
-    }
+function AddInvocationExpansionListener(button) {
+    button.addEventListener('click', () => {
+        button.classList.toggle('invocation_expanded');
+        const copyButton = getInvocationCopyButtonFromInvocationButton(button);
+        const invocationExpansion = getInvocationExpansionFromInvocationButton(button);
+        if (invocationExpansion.style.maxHeight) {
+            invocationExpansion.style.maxHeight = null; // Not 0
+            copyButton.style.visibility = 'hidden';
+        } else {
+            const h = invocationExpansion.scrollHeight;
+            invocationExpansion.style.maxHeight = `${h}px`;
+            copyButton.style.visibility = 'visible';
+        }
+        const contentElement = invocationExpansion.querySelector('#invocation_content');
+        copyButton.addEventListener('click', () => {
+            copyToClipboard(contentElement);
+        });
+        copyButton.addEventListener('mousedown', () => {
+            contentElement.style.color = 'blue';
+        });
+        copyButton.addEventListener('mouseup', () => {
+            contentElement.style.color = 'black';
+        })
+    });
+};
+
+/**
+ * @param {!HTMLAnchorElement} anchorElement
+ */
+function AddIframeOpenListener(anchorElement) {
+    anchorElement.addEventListener('click', (event) => {
+        event.preventDefault(); // Don't open a link.
+        if (anchorElement.classList.contains('link_stdout_open')) {
+          anchorElement.classList.remove('link_stdout_open');
+          const iframe = gDetailPanel.querySelector('.test_stdout_iframe');
+          gDetailPanel.removeChild(iframe);
+        } else {
+          anchorElement.classList.add('link_stdout_open');
+          const url = anchorElement.href;
+          const iframe = document.createElement('iframe');
+          iframe.classList.add('test_stdout_iframe');
+          iframe.src = url;
+          gDetailPanel.appendChild(iframe);
+        }
+    });
+}
+
+/**
+ * @param {!HTMLElement} anchorElement
+ * @param {!HTMLElement} viewElement
+ */
+function replaceView(anchorElement, viewElement) {
+    anchorElement.textContent = ''; // Remove all child nodes.
+    anchorElement.appendChild(viewElement);
 }
 
 /**
  * @param {!HTMLElement} button
  * @return {!HTMLElement}
  */
-function getEntryExpansionFromEntryButton(button) {
+function getEntryDetailFromEntryButton(button) {
     return button.nextElementSibling; // Sync with HTML
 }
 
@@ -283,14 +320,4 @@ function getInvocationCopyButtonFromInvocationButton(button) {
  */
 function getInvocationExpansionFromInvocationButton(button) {
     return button.nextElementSibling.nextElementSibling; // Sync with HTML
-}
-
-/**
- * @param {number} milliseconds
- * @return {!Promise}
- */
-async function sleepTimeout(milliseconds) {
-    return new Promise(resolve => {
-        setTimeout(resolve, milliseconds);
-    });
 }

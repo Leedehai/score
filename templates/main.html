@@ -30,23 +30,25 @@
         <div class="sub_status_bar">
             <span id="test_results_stats">><!-- JS generated --></span>
             <span id="view_control_panel">
-                <!-- Put expand/collapse button first, as it changes width if clicked -->
-                <span id="view_control_expand_or_collapse">[<!-- Use as a button -->
-                    <!-- The string should be synced with the JS script -->
-                    <a id="view_control_expand_or_collapse_button">expand all</a>
-                ]</span>
-                <span class="view_control_panel_vertial_divider"></span>
                 <input type="checkbox" id="view_control_visibility_checkbox_successes" checked>
                 successes
+                <span class="view_control_panel_vertial_divider"></span>
                 <input type="checkbox" id="view_control_visibility_checkbox_errors" checked>
                 errors
             </span>
         </div>
-        <div class="entries_view_html">{entries_view_html}</div>
-        <br>
-        <div class="disabled_cases">
-            <span class="disabled_cases_message">{message_disabled_case_count}</span><br>
-            {disabled_case_html}
+        <div class="row">
+          <div class="column column_left">
+            <div class="entries_view_html">{entries_view_html}</div>
+            <br>
+            <div class="disabled_cases">
+                <span class="disabled_cases_message">{message_disabled_case_count}</span><br>
+                {disabled_case_html}
+            </div>
+          </div>
+          <div class="column column_right">
+            <div class="entry_details_view"></div>
+          </div>
         </div>
         <div class="html_footer">@leedehai</div>
     </div>

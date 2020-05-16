@@ -72,3 +72,15 @@ def hyperlink_str(url: str, description : str = "link") -> str:
         return url
     url = url if "://" in url else ("file://" + os.path.abspath(url))
     return "\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\" % (url, description)
+
+ELLIPSE = "..."
+BEGINNING_KEPT = 12
+def ellipse_str(limit, s):
+    assert (limit >= BEGINNING_KEPT + len(ELLIPSE))
+    if len(s) <= limit:
+        return s
+    return "%s%s%s" % (
+        s[:BEGINNING_KEPT],
+        ELLIPSE,
+        s[-(limit - BEGINNING_KEPT - len(ELLIPSE)):]
+    )

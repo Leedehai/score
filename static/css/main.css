@@ -3,11 +3,6 @@ body {
     overflow-x: hidden; /* No horizontally scrolling beyond screen edges */
 }
 
-.master_container {
-    display: flex;
-    flex-direction: column;
-}
-
 .html_header {
     font-family: Helvetica, sans-serif;
 }
@@ -89,14 +84,6 @@ body {
     right: 12px;
 }
 
-.sub_status_bar #view_control_panel #view_control_expand_or_collapse {
-    font-family: Helvetica, sans-serif;
-    font-weight: normal;
-    font-size: 12px;
-    color: gray;
-    cursor: pointer;
-}
-
 .sub_status_bar #view_control_panel .view_control_panel_vertial_divider {
     width: 2px;
     display: inline-block;
@@ -107,13 +94,37 @@ body {
     cursor: pointer;
 }
 
-.sub_status_bar #view_control_panel #view_control_expand_or_collapse a:hover {
-    text-decoration: underline;
-}
-
 .entries_view_html {
     width: 100%;
     margin: 6px 6px;
+    overflow-y: scroll;
+    height: 100vh;
+}
+
+.column {
+    float: left;
+    padding: 10px;
+}
+
+.column_left {
+    width: 36%;
+}
+
+.column_right {
+    width: 60%;
+    max-height: 100vh;
+}
+
+.entry_details_view {
+    overflow-y: scroll;
+    max-height: 100vh;
+}
+
+/* Clear floats after the columns */
+.row:after {
+    content: "";
+    display: table;
+    clear: both;
 }
 
 .html_footer {

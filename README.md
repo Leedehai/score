@@ -91,8 +91,13 @@ rm -rf logs3 && rm -f delete_me.gold
 
 ### [score_view.py](score_view.py)
 
-Generate a static website to view test results in browser.
+Generate a static page to view test results in browser.
 It can be used as a standalone program or as a package.
+
+> NOTE: the static page uses primitive HTML, CSS, and JS, and does not
+require any third-party packages. This is ad-hoc and does not adhere
+to modern best practices in website engineering. However, it is not
+intended to build a complex website in the first place.
 
 ```
 ./score_view.py -h
@@ -114,8 +119,8 @@ For requirements of the timer and log file: see score_run.py --docs
 
 The resulting website contains a expandable list of results, like this:
 
-![example_view_1.png](./example_view_1.png)
-![example_view_2.png](./example_view_2.png)
+![score_view_example_1.png](./score_view_example_1.png)
+![score_view_example_2.png](./score_view_example_2.png)
 
 #### Examples
 ```sh
