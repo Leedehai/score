@@ -69,6 +69,14 @@ def _result_cell_ternary(
         return on_error_but_flaky
     return on_error
 
+def _human_friendly_time_elapse(sec: int):
+    h = int(sec / 3600)
+    m = int((sec % 3600) / 60)
+    s = (sec % 3600) % 60
+    if h == 0:
+        return "{} min, {} sec".format(m, s)
+    return "{} hr {} min, {} sec".format(h, m, s)
+
 MIN_PATH_LEN = 3
 def _timeline_svg_html(
     result: dict, length: float, start_time_min: float, whole_time: float) -> str:
@@ -99,7 +107,8 @@ def _disabled_case_html(disabled_cases: List[dict]):
     )
 
 def _populate_test_results_table(
-    results: List[dict], start_time_min: float, whole_time: float, html_dir: str) -> str:
+    results: List[dict], start_time_min: float, whole_time: float, html_dir: str,
+    has_golden_file: bool) -> str:
     """
     Generate an HTML table for all results for one test.
     results: task results for this one test, length == the test's repeat times.
@@ -122,7 +131,7 @@ def _populate_test_results_table(
     )
     file_size_str = lambda size : "0" if size == 0 else ("%.2f" % size)
     for result in results:
-        half_backed_row = (TableRowBuilder("td")
+        half_baked_row = (TableRowBuilder("td")
             .add_data_cell(result["repeat"]["count"])
             .add_data_cell(
                 _result_cell_ternary(result, "good", "bad", "bad, flaky"), # content
@@ -142,17 +151,17 @@ def _populate_test_results_table(
             )
         )
         if result["stdout"]["ok"]:
-            half_backed_row = half_backed_row.add_data_cell("-") # stdout diff
+            half_baked_row = half_baked_row.add_data_cell("-") # stdout diff
         else:
-            half_backed_row = half_backed_row.add_href_cell( # stdout diff
+            half_baked_row = half_baked_row.add_href_cell( # stdout diff
                 os.path.relpath(result["stdout"]["diff_file"], html_dir),
                 text="diff",
                 comment="%s KB" % file_size_str(
                     os.path.getsize(result["stdout"]["diff_file"]) / 1024.0)
             )
         row_list.append(
-            half_backed_row
-            .add_data_cell(str(result["stdout"]["ok"]).lower()) # stdout ok
+            half_baked_row
+            .add_data_cell(str(result["stdout"]["ok"]).lower() if has_golden_file else "-") # stdout ok
             .add_data_cell(_timeline_svg_html(
                 result, 160, start_time_min, whole_time)) # timeline
             .done()
@@ -186,16 +195,18 @@ def _populate_entries_view(
         average_runtime_ms = statistics.mean(
             e["times_ms"]["proc"] for e in results_for_one_test
         )
+        golden_file_or_none = results_for_one_test[0]["stdout"]["golden_file"]
         results_table_html = _populate_test_results_table(
-            results_for_one_test, start_time_min, whole_time, html_dir)
+            results_for_one_test, start_time_min, whole_time, html_dir,
+            has_golden_file = golden_file_or_none != None)
         test_entry_html = ENTRY_PIECE_TEMPLATE.format(
             test_description_with_ellipse_if_necessary = score_utils.ellipse_str(
-                60, results_for_one_test[0]["desc"]),
+                50, results_for_one_test[0]["desc"]),
             test_description = results_for_one_test[0]["desc"],
             command_invocation = command_invocation,
             expected_exit = _searialize_exit_object(
                 results_for_one_test[0]["exit"]["expected"]),
-            expected_stdout = results_for_one_test[0]["stdout"]["golden_file"],
+            expected_stdout = golden_file_or_none,
             timeout_ms = "%s ms" % (results_for_one_test[0]["timeout_ms"]),
             known_flaky = known_flaky_errors,
             attempt_count = len(results_for_one_test),
@@ -220,6 +231,7 @@ def _populate_html_template(
         master_log = master_log_path.absolute(),
         master_log_mtime = datetime.datetime.fromtimestamp(
             master_log_path.stat().st_mtime).strftime("%a, %b %d, %Y %H:%M:%S"),
+        whole_time_str = _human_friendly_time_elapse(sec = 1 + int(whole_time / 1000)),
         error_task_count = error_task_count,
         entries_view_html = _populate_entries_view(
             sorted_test_results = sorted_test_results, timer_program = timer_program,

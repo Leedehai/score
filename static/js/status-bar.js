@@ -5,11 +5,11 @@ const shortMessage = document.getElementById('status_bar_short_message');
 if (window.errorTaskCount === 0) {
     statusBar.style.backgroundColor = '#f0f7ee'; // Light green
     statusBar.style.borderColor = '#4caf50'; // Dark green
-    shortMessage.textContent = 'Success';
+    shortMessage.textContent = 'success';
 } else {
     statusBar.style.backgroundColor = '#fbeceb'; // Light red
     statusBar.style.borderColor = '#dc153c'; // Dark red
-    shortMessage.textContent = 'Error';
+    shortMessage.textContent = 'error';
 }
 shortMessage.style.color = statusBar.style.borderColor;
 

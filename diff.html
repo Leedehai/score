@@ -89,9 +89,9 @@
         function ensureNumAndTextColumnIsWide(num_width, text_width) {
             let line_number_tds = document.getElementsByClassName("diff_header");
             for (let line_num_node of line_number_tds) {
-                line_num_node.style="width:" + num_width + "ch";
+                line_num_node.style="width:" + num_width + "ch; border: 1px black dashed; padding: 0px;";
                 const text_td_node = line_num_node.nextSibling;
-                text_td_node.style="width:" + text_width + "ch";
+                text_td_node.style="width:" + text_width + "ch; display: inline-block; word-wrap: break-word;";
             }
         }
         function colorEntireLinesWhereDiffSpansExist() {

@@ -51,16 +51,17 @@ gTestEntryButtons.forEach(button => {
     pluralSuffixSpan.textContent = attemptCount > 1 ? 's' : '';
 
     let entryThemeColor = '';
-    let statusSvgIcon = null;
+    let statusIcon = null;
     let statusTextMsg = '';
     let statusClassName = '';
     gTestStats.total += 1;
     if (errorAttemptCount === 0) { // All attempts are definite successes
         entryThemeColor = '#4caf50'; // Green
-        statusSvgIcon = makeSvgPath({
-            width: 15, height: 15, color: entryThemeColor,
-            path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
-        });
+        // statusIcon = makeSvgPath({
+        //     width: 15, height: 15, color: entryThemeColor,
+        //     path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
+        // });
+        statusIcon = makeMaterialIcon('check_circle_outline', entryThemeColor);
         gTestStats.success += 1;
         statusTextMsg = 'success';
         statusClassName = 'status_success';
@@ -68,10 +69,11 @@ gTestEntryButtons.forEach(button => {
         entryDetail.classList.add('entry_detail_passed_test');
     } else if (allErrorsAreKnownFlaky) { // Treat the test status as success
         entryThemeColor = '#9932cc'; // Purple
-        statusSvgIcon = makeSvgPath({
-            width: 15, height: 15, color: entryThemeColor,
-            path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
-        });
+        // statusIcon = makeSvgPath({
+        //     width: 15, height: 15, color: entryThemeColor,
+        //     path: 'M0.5 9 L6.5 13.7 L14.5 1.5', // Check mark
+        // });
+        statusIcon = makeMaterialIcon('check_circle_outline', entryThemeColor);
         gTestStats.error_but_flaky += 1;
         statusTextMsg = 'all errors are known as flaky';
         statusClassName = 'status_pseudo_success';
@@ -79,10 +81,11 @@ gTestEntryButtons.forEach(button => {
         entryDetail.classList.add('entry_detail_erred_but_flaky_test');
     } else { // Has definite error
         entryThemeColor = '#f03f50'; // Red
-        statusSvgIcon = makeSvgPath({
-            width: 15, height: 15, color: '#f03f50',
-            path: 'M1 1 L14 14 M14 1 L1 14', // Cross mark
-        });
+        // statusIcon = makeSvgPath({
+        //     width: 15, height: 15, color: '#f03f50',
+        //     path: 'M1 1 L14 14 M14 1 L1 14', // Cross mark
+        // });
+        statusIcon = makeMaterialIcon('error_outline', entryThemeColor);
         gTestStats.error += 1;
         statusTextMsg = 'error';
         statusClassName = 'status_error';
@@ -99,23 +102,22 @@ gTestEntryButtons.forEach(button => {
     successInfoDiv.style.color = entryThemeColor;
 
     const statusIconSpan = button.querySelector('span#status_icon');
-    statusIconSpan.appendChild(statusSvgIcon);
+    statusIconSpan.appendChild(statusIcon);
     const statusMsgSpan = button.querySelector('span#status_message');
     statusMsgSpan.textContent = statusTextMsg;
 });
 
 // Set innerHTML rather than innerText or textContent, for '&emsp;'.
 document.body.querySelector("span#test_results_stats").innerHTML =
-    `Total ${gTestStats.total}&emsp;&emsp;&emsp;`
+    `Total ${gTestStats.total}&emsp;:&emsp;&emsp;`
     + `Success ${gTestStats.success}&emsp;&emsp;&emsp;`
-    + `Error ${gTestStats.error}&emsp;&emsp;&emsp;`
-    + `Flaky ${gTestStats.error_but_flaky}`;
+    + `Error ${gTestStats.error + gTestStats.error_but_flaky}`;
 
 Array.from(document.getElementsByClassName('golden_file_link_span')).forEach(e => {
     const anchorElement = e.querySelector('a#maybe_link');
     if (anchorElement.href.toLowerCase().endsWith('none')) {
         e.removeChild(anchorElement);
-        e.textContent = '(none)';
+        e.textContent = '-';
     }
 });
 
@@ -176,6 +178,22 @@ function makeSvgPath({ width, height, path, color }) {
     svgPath.setAttribute('fill', 'transparent');
     svg.appendChild(svgPath);
     return svg;
+}
+
+/**
+ * Material icon, requiring importing its CSS (in main.html).
+ * @param {string} icon_name
+ * @param {string=} color
+ * @return {!HTMLIconElement}
+ */
+function makeMaterialIcon(icon_name, color) {
+  const span = document.createElement('i');
+  span.classList.add('material-icons');
+  if (color) {
+    span.style.color = color;
+  }
+  span.innerText = icon_name;
+  return span;
 }
 
 const checkboxShowErrors = document.body.querySelector(
@@ -265,6 +283,7 @@ function makeEntryDetailView(entryDetail) {
     const invocationExpansion = entryDetail.querySelector('.invocation_expansion');
     const fullHeight = entryDetail.scrollHeight + invocationExpansion.scrollHeight;
     const cloned = entryDetail.cloneNode(/*deep=*/true);
+    cloned.style.maxHeight = fullHeight;
     const invocationButton = cloned.querySelector('.invocation_button');
     if (invocationButton) {
         AddInvocationExpansionListener(invocationButton);
@@ -273,7 +292,14 @@ function makeEntryDetailView(entryDetail) {
     if (stdoutAnchor) {
         AddIframeOpenListener(stdoutAnchor);
     }
-    cloned.style.maxHeight = fullHeight;
+    let successInfoIconName = null;
+    if (entryDetail.classList.contains('status_success')) {
+      successInfoIconName = 'check_circle_outline';
+    } else {
+      successInfoIconName = 'error_outline';
+    }
+    cloned.querySelector('#success_info_icon').appendChild(
+      makeMaterialIcon(successInfoIconName, /*color=*/'inherit'));
     return cloned;
 }
 
@@ -310,17 +336,21 @@ function AddInvocationExpansionListener(button) {
  * @param {!HTMLAnchorElement} anchorElement
  */
 function AddIframeOpenListener(anchorElement) {
+    const isOpenClassName = 'link_stdout_is_open';
+    const iframeClassName = 'test_stdout_iframe';
     anchorElement.addEventListener('click', (event) => {
         event.preventDefault(); // Don't open a link.
-        if (anchorElement.classList.contains('link_stdout_open')) {
-          anchorElement.classList.remove('link_stdout_open');
-          const iframe = gDetailPanel.querySelector('.test_stdout_iframe');
+        if (anchorElement.classList.contains(isOpenClassName)) {
+          anchorElement.classList.remove(isOpenClassName);
+          const iframe = gDetailPanel.querySelector(`.${iframeClassName}`);
           gDetailPanel.removeChild(iframe);
         } else {
-          anchorElement.classList.add('link_stdout_open');
+          anchorElement.classList.add(isOpenClassName);
           const url = anchorElement.href;
+          // Loading a file from disk: has to use an iframe due to CORS policy
+          // in browsers.
           const iframe = document.createElement('iframe');
-          iframe.classList.add('test_stdout_iframe');
+          iframe.classList.add(iframeClassName);
           iframe.src = url;
           gDetailPanel.appendChild(iframe);
         }

@@ -344,24 +344,7 @@ def write_file(
         f.write(s)
 
 def process_inspectee_stdout(s: str) -> str:
-    # remove color sequences
-    s = re.sub(r"\x1b\[.*?m", "", s)
-    # Do not use textwrap: unstable; they always add new kwargs, largely opaque
-    # Do not use '\n'.join(s[i:i+N] for i in range(0, len(s), N)): don't want
-    # to end up with ...\n\n...
-    new_lines, cur_line, cnt = [], "", 0
-    for c in s: # for each character
-        cur_line += c
-        cnt += 1
-        if c == '\n':
-            new_lines.append(cur_line) # ends with '\n'
-            cur_line, cnt = "", 0
-        elif cnt == 90: # this limit is used by diff.html and diff_html_str.py
-            new_lines.append(cur_line + '\n') # force linebreak
-            cur_line, cnt = "", 0
-    if cur_line:
-        new_lines.append(cur_line)
-    return ''.join(new_lines)
+    return re.sub(r"\x1b\[.*?m", "", s) # remove color sequences
 
 # exit type: Sync with EXPLANATION_STRING
 EXIT_TYPE_TO_FLAKINESS_ERR = {

@@ -47,7 +47,7 @@ def get_diff_html_str(
         get_size_str(actual_filename),
         os.path.abspath(actual_filename), os.path.relpath(actual_filename)
     ]
-    html_differ = difflib.HtmlDiff(tabsize=4, wrapcolumn=93) # 93: if change, only larger
+    html_differ = difflib.HtmlDiff(tabsize=4) # Do not set wrapcolumn
     diff_str_as_html_table = html_differ.make_table(
         expected_lines, actual_lines, context=False, numlines=5)
     if not found_expected:

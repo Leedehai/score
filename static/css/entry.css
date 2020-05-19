@@ -1,3 +1,7 @@
+.entries_view_html .material-icons {
+  font-size: 16px;
+}
+
 .test_entry_button {
     width: 99%;
     background-color: transparent;
@@ -8,7 +12,7 @@
     outline: none;
     font-family: Helvetica, sans-serif;
     font-size: 14px;
-    margin: 2px;
+    margin: 1px;
     padding: 1px 7px;
     position: relative;
 }
@@ -213,13 +217,20 @@
     color: #9932cc; /* Also see test-entries.js */
 }
 
+.test_entry_detail .material-icons {
+    font-size: 16px;
+    vertical-align: middle;
+    margin-left: 0.2em;
+}
+
+.link_stdout_is_open {
+  background-color: #c7f3fa;
+  border-radius: 2px;
+}
+
 .test_stdout_iframe {
     margin-top: 1em;
     border: solid 1px gray;
     width: 90%;
     height: 50%;
-}
-
-.link_stdout_open {
-  background-color: #b1e9f1;
 }

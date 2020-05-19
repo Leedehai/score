@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="static/css/main.css">
     <link rel="stylesheet" href="static/css/entry.css">
     <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="static/js/dynamic-favicon.js"></script>
     <script>
         // Globals
@@ -21,25 +22,28 @@
         <div class="html_header">
             <div class="test_title">{test_title}</div>
         </div>
-        <span id="test_log_mtime">Finished: {master_log_mtime}</span>
         <div class="status_bar" id="status_bar">
-            <span id="status_bar_short_message"><!-- JS generated --></span>
-            <span id="test_directory_breadcumbs"><!-- JS generated --></span>
-            <span class="master_log_link"><a href="{master_log}" target="_blank">raw log</a></span>
+            <span id="status_bar_icon"></span>
+            <span id="status_bar_short_message"></span>
+            <span id="test_directory_breadcumbs"></span>
+            <span id="test_log_mtime">Completed on {master_log_mtime} for {whole_time_str}</span>
         </div>
         <div class="sub_status_bar">
-            <span id="test_results_stats">><!-- JS generated --></span>
+            <span id="test_results_stats"></span>
+            <span id="master_log_link"><a href="{master_log}" target="_blank">raw log</a></span>
         </div>
         <div class="row">
           <div class="column column_left">
             <div id="view_control_panel">
+                <i class="material-icons">search</i>
+                <span class="view_control_panel_vertial_divider"></span>
+                <input class="entries_search_bar" type="text" placeholder="Filter by regular expression...">
+                <span class="view_control_panel_vertial_divider"></span>
                 <span class="view_control_checkboxes">
                   <label><input type="checkbox" id="view_control_visibility_checkbox_successes" checked>successes</label>
                   <span class="view_control_panel_vertial_divider"></span>
                   <label><input type="checkbox" id="view_control_visibility_checkbox_errors" checked>errors</label>
                 </span>
-                <span class="view_control_panel_vertial_divider"></span>
-                <input class="entries_search_bar" type="text" placeholder="Search by regular expression...">
             </div>
             <div class="entries_view_html">{entries_view_html}</div>
             <br>
