@@ -79,21 +79,6 @@ body {
     left: 12px;
 }
 
-.sub_status_bar #view_control_panel {
-    position: absolute;
-    right: 12px;
-}
-
-.sub_status_bar #view_control_panel .view_control_panel_vertial_divider {
-    width: 2px;
-    display: inline-block;
-}
-
-.sub_status_bar #view_control_panel #view_control_visibility_checkbox_successes,
-.sub_status_bar #view_control_panel #view_control_visibility_checkbox_errors {
-    cursor: pointer;
-}
-
 .entries_view_html {
     width: 100%;
     margin: 6px 6px;
@@ -113,6 +98,35 @@ body {
 .column_right {
     width: 60%;
     max-height: 100vh;
+}
+
+#view_control_panel {
+  font-family: Helvetica, sans-serif;
+  font-weight: normal;
+  font-size: 12px;
+  margin-left: 10px;
+  position: relative;
+  display: flex;
+  flex-direction: row-reverse;
+  width: 100%;
+}
+
+#view_control_panel .entries_search_bar {
+  flex-grow: 1
+}
+
+#view_control_panel .view_control_panel_vertial_divider {
+  width: 5px;
+  display: inline-block;
+}
+
+#view_control_panel .view_control_checkboxes {
+  display: inline-block;
+}
+
+#view_control_panel .view_control_checkboxes #view_control_visibility_checkbox_successes,
+#view_control_panel .view_control_checkboxes #view_control_visibility_checkbox_errors {
+  cursor: pointer;
 }
 
 .entry_details_view {

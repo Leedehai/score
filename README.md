@@ -96,8 +96,9 @@ It can be used as a standalone program or as a package.
 
 > NOTE: the static page uses primitive HTML, CSS, and JS, and does not
 require any third-party packages. This is ad-hoc and does not adhere
-to modern best practices in website engineering. However, it is not
-intended to build a complex website in the first place.
+to modern best practices in website engineering (indeed, we can't use
+Node, webpack etc. here). However, it is not intended to build a
+complex website in the first place.
 
 ```
 ./score_view.py -h

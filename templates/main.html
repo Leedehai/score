@@ -29,16 +29,18 @@
         </div>
         <div class="sub_status_bar">
             <span id="test_results_stats">><!-- JS generated --></span>
-            <span id="view_control_panel">
-                <input type="checkbox" id="view_control_visibility_checkbox_successes" checked>
-                successes
-                <span class="view_control_panel_vertial_divider"></span>
-                <input type="checkbox" id="view_control_visibility_checkbox_errors" checked>
-                errors
-            </span>
         </div>
         <div class="row">
           <div class="column column_left">
+            <div id="view_control_panel">
+                <span class="view_control_checkboxes">
+                  <label><input type="checkbox" id="view_control_visibility_checkbox_successes" checked>successes</label>
+                  <span class="view_control_panel_vertial_divider"></span>
+                  <label><input type="checkbox" id="view_control_visibility_checkbox_errors" checked>errors</label>
+                </span>
+                <span class="view_control_panel_vertial_divider"></span>
+                <input class="entries_search_bar" type="text" placeholder="Search by regular expression...">
+            </div>
             <div class="entries_view_html">{entries_view_html}</div>
             <br>
             <div class="disabled_cases">

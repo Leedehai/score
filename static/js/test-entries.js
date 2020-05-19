@@ -19,7 +19,8 @@ let gDetailPanelPlaceholder = (function() {
 const gDetailPanel = document.querySelector('.entry_details_view');
 replaceView(gDetailPanel, gDetailPanelPlaceholder);
 
-Array.from(document.getElementsByClassName('test_entry_button')).forEach(button => {
+const gTestEntryButtons = document.body.querySelectorAll('.test_entry_button');
+gTestEntryButtons.forEach(button => {
     const entryDetail = getEntryDetailFromEntryButton(button);
     button.addEventListener('click', () => {
         const clickedOnSelectedButton = window.gSelectedButton === button;
@@ -179,27 +180,62 @@ function makeSvgPath({ width, height, path, color }) {
 
 const checkboxShowErrors = document.body.querySelector(
     'input#view_control_visibility_checkbox_errors');
-const controlledByShowErrors = document.body.querySelectorAll([
+const controlledByShowErrors = document.body.querySelectorAll(
     '.test_entry_button.status_error',
-    '.test_entry_detail.status_error',
-].join(','));
+);
 const checkboxShowSuccesses = document.body.querySelector(
     'input#view_control_visibility_checkbox_successes');
 const controlledByShowSuccesses = document.body.querySelectorAll([
     '.test_entry_button.status_success',
-    '.test_entry_detail.status_success',
-    '.test_entry_button.status_pseudo_success',
-    '.test_entry_detail.status_pseudo_success',
+    '.test_entry_button.status_pseudo_success', // known flaky tests which succeeded
 ].join(','));
-const displaySetter = /** @type {boolean} */ condition => element => {
-    element.style.display = condition ? null : 'none';
+const searchBarElement = document.body.querySelector(
+  'input.entries_search_bar'
+);
+
+/**
+ * @param {!HTMLButtonElement} buttonElement
+ * @param {boolean} shouldDisplay
+ */
+function setButtonDisplayState(buttonElement, shouldDisplay) {
+    buttonElement.style.display = shouldDisplay ? null : 'none';
+    if (!shouldDisplay && window.gSelectedButton === buttonElement) {
+      window.gSelectedButton = null;
+      buttonElement.classList.remove('test_entry_detail_displayed');
+      replaceView(gDetailPanel, gDetailPanelPlaceholder);
+    }
 };
+let displayEntryCriteria = {showSuccesses: true, showErrors: true, descQuery: ''};
+function updateDisplayState(updateState) {
+    Object.assign(displayEntryCriteria, updateState);
+    gTestEntryButtons.forEach(button => {
+        const desc = button.querySelector('span#full_description').textContent;
+        const isSuccess = button.classList.contains('status_success')
+            || button.classList.contains('status_pseudo_success');
+        const isError = button.classList.contains('status_error');
+        const pickedUpByShowSuccess = displayEntryCriteria.showSuccesses && isSuccess;
+        const pickedUpByShowError = displayEntryCriteria.showErrors && isError;
+        let pickedUpByDescQuery = true;
+        try {
+          pickedUpByDescQuery = desc.search(new RegExp(displayEntryCriteria.descQuery)) >= 0;
+        } catch (e) { // Invalid Regex
+          searchBarElement.style = "color: #f03f50;"; // Red
+          console.log(searchBarElement.style);
+          return;
+        }
+        searchBarElement.style = "color: initial;";
+        if ((pickedUpByShowSuccess || pickedUpByShowError) && pickedUpByDescQuery) {
+            setButtonDisplayState(button, true);
+        } else {
+            setButtonDisplayState(button, false);
+        }
+    });
+}
 const opacitySetter = /** @type {number|null} */ opacity => element => {
     element.style.opacity = opacity;
 };
 checkboxShowErrors.addEventListener('click', () => {
-    controlledByShowErrors.forEach(
-        displaySetter(checkboxShowErrors.checked));
+    updateDisplayState({showErrors: checkboxShowErrors.checked});
 });
 checkboxShowErrors.addEventListener('mouseenter', () => {
     controlledByShowErrors.forEach(opacitySetter(0.5));
@@ -208,8 +244,7 @@ checkboxShowErrors.addEventListener('mouseout', () => {
     controlledByShowErrors.forEach(opacitySetter(null));
 });
 checkboxShowSuccesses.addEventListener('click', () => {
-    controlledByShowSuccesses.forEach(
-        displaySetter(checkboxShowSuccesses.checked));
+    updateDisplayState({showSuccesses: checkboxShowSuccesses.checked});
 });
 checkboxShowSuccesses.addEventListener('mouseenter', () => {
     controlledByShowSuccesses.forEach(opacitySetter(0.5));
@@ -217,6 +252,10 @@ checkboxShowSuccesses.addEventListener('mouseenter', () => {
 checkboxShowSuccesses.addEventListener('mouseout', () => {
     controlledByShowSuccesses.forEach(opacitySetter(null));
 });
+searchBarElement.addEventListener('keyup', () => {
+  // Not 'keypress' because it doesn't catch Deletion key.
+  updateDisplayState({descQuery: searchBarElement.value});
+})
 
 /**
  * @param {!HTMLElement} entryDetail
@@ -232,7 +271,6 @@ function makeEntryDetailView(entryDetail) {
     }
     const stdoutAnchor = cloned.querySelector('.link_stdout');
     if (stdoutAnchor) {
-        console.log(gDetailPanel.width, gDetailPanel.height);
         AddIframeOpenListener(stdoutAnchor);
     }
     cloned.style.maxHeight = fullHeight;
