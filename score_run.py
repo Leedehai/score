@@ -25,6 +25,7 @@ import copy
 import hashlib
 import json
 import multiprocessing
+import multiprocessing.dummy as mp  # threading wrapped using multiprocessing API
 import os
 import platform
 import random
@@ -106,10 +107,10 @@ def get_metadata_from_path(path: str) -> dict:
     }
 
 
-# Run multiprocessing.Pool.map()
-# NOTE the try-except block is to handle KeyboardInterrupt cleanly to fix a flaw in Python:
-# KeyboardInterrupt cannot cleanly kill a multiprocessing.Pool()'s child processes, printing verbosely
-# https://stackoverflow.com/a/6191991/8385554
+# Run mp.Pool.map()
+# NOTE the try-except block is to handle KeyboardInterrupt cleanly to fix a flaw
+# in Python: KeyboardInterrupt cannot cleanly kill mp.Pool()'s child processes,
+# printing verbosely: https://stackoverflow.com/a/6191991/8385554
 # NOTE each 'func' has to ignore SIGINT for the aforementioned fix to work
 # NOTE do not use 'threading' due to GIL (global interpreter lock)
 def pool_map(num_workers: int, func, inputs: list) -> list:
@@ -121,18 +122,9 @@ def pool_map(num_workers: int, func, inputs: list) -> list:
         global g_count
         g_count = count
 
-    l = multiprocessing.Lock()
-    # On macOS, a multiprocessing queue must be instantiated from
-    # multiprocessing.Manager().Queue() instead of directory from
-    # multiprocessing.Queue(). Otherwise, its qsize() method will
-    # raise a NotImplementedError.. nasty Python. This is a known
-    # bug: https://github.com/vterron/lemon/issues/11
-    # Another solution: https://github.com/keras-team/autokeras/issues/368#issuecomment-461625748
-    mgr = multiprocessing.Manager()  # creates a server process
-    q, c = mgr.Queue(5), mgr.Value('i', 0)
-    pool = multiprocessing.Pool(num_workers,
-                                initializer=init_shared_mem,
-                                initargs=(l, q, c))
+    l = mp.Lock()
+    q, c = mp.Queue(5), mp.Value('i', 0)
+    pool = mp.Pool(num_workers, initializer=init_shared_mem, initargs=(l, q, c))
     try:
         res = pool.map(func, inputs)
         clear_rotating_log(q)
@@ -574,6 +566,15 @@ def run_one_impl(timer: str, log_dirname: str, write_golden: bool,
     # unless the timer itself has errors.
     try:
         start_abs_time = time.time()
+        # NOTE We have to spawn timer and let timer spawn the program,
+        # instead of directly spawning the program while using preexec_fn
+        # to set the timeout, because (1) Python's signal.setitimer() and
+        # resource.getrusage() do not measure time as accurate as the timer
+        # written in C++ [1], (2) moreover, preexec_fn is not thread-safe:
+        # https://docs.python.org/3/library/subprocess.html
+        # [1] I wrote a Python program to verify this. I set the timeout
+        #     to be 10 msec and give it a infinite-loop program, when it
+        #     times out the reported time usage is 14 msec, way over 10.
         stdout = subprocess.check_output([timer, metadata["path"]] +
                                          metadata["args"],
                                          stderr=subprocess.DEVNULL,
