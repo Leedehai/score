@@ -42,7 +42,6 @@ optional arguments:
   -s S, --seed S       set the seed for the random number generator
   --flakiness DIR      load flakiness declaration files *.flaky under DIR
   -w, --write-golden   write stdout to golden files instead of checking
-  --only "+0,-1,+5.."  only run the selected tests (grammar in '--docs')
   --docs               self-documentation in more details
 
 Unless '--docs' is given, exactly one of '--paths' and '--meta' is needed.

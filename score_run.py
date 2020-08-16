@@ -31,14 +31,12 @@ import re
 import shutil
 import signal
 import subprocess
-import textwrap
 import time
+from typing import Optional
 
-# custom modules
 from diff_html_str import get_diff_html_str
 from flakiness import parse_flakiness_decls
 import score_utils
-import score_view
 
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
@@ -54,11 +52,13 @@ TERMINAL_COLS = int(os.popen('stty size', 'r').read().split()[1]) if IS_ATTY els
 if (TERMINAL_COLS <= 25):
     sys.exit("[Error] terminal width (%d) is rediculously small" % TERMINAL_COLS)
 
+Args = argparse.Namespace
+
 # Used by did_run_one()
 def generate_result_dict(
     metadata: dict, ctimer_reports: dict, match_exit: bool, write_golden: bool,
     start_abs_time: float, end_abs_time: float,
-    stdout_filename: str, diff_filename: str,
+    stdout_filename: Optional[str], diff_filename: Optional[str],
     exceptions: list) -> collections.OrderedDict:
     all_ok = match_exit and diff_filename == None
     golden_filename = os.path.abspath(metadata["golden"]) if metadata["golden"] else None
@@ -147,7 +147,7 @@ GOLDEN_NOT_WRITTEN_WRONG_EXIT = "%s: the test's exit is not as expected" % GOLDE
 GOLDEN_FILE_MISSING = "golden file missing"
 
 # Set signal handlers
-def sighandler(sig: int, frame):
+def sighandler(sig: signal.Signals, frame):
     # do not print: it's ugly for all workers to print together
     sys.exit(1)
 signal.signal(signal.SIGINT, sighandler)
@@ -226,7 +226,6 @@ CASE_ID_HASH_LEN = 8 # NOTE value should sync with EXPLANATION_STRING below
 # prog = "baz/bar/foo", args = [], envs = {}      => return: "bar/foo-00000000"
 # prog = "baz/bar/foo", args = [ '9' ], envs = {} => return: "bar/foo-0ade7c2c"
 def compute_comb_id(prog: str, args: list, envs: dict) -> str:
-    assert(type(args) == list and type(envs) == dict)
     prog_basename = os.path.basename(prog)
     prog_dir_basename = os.path.basename(os.path.dirname(prog)) # "" if prog doesn't contain '/'
     path_repr = os.path.join(prog_dir_basename, prog_basename)
@@ -286,7 +285,7 @@ def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
 
 # when using '--write-golden'
 def print_golden_overwriting_result_to_stderr(result: dict, timer: str):
-    attempted_golden_file = result["stdout"]["golden_file"] # abs path
+    attempted_golden_file: str = result["stdout"]["golden_file"] # abs path
     not_written_exceptions = [
         e for e in result["exceptions"]
         if e.startswith(GOLDEN_NOT_WRITTEN_PREFIX)
@@ -403,7 +402,8 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
         metadata["comb_id"], metadata["repeat"]["count"], log_dirname)
     stdout_filename = None if write_golden else os.path.abspath(filepath_stem + ".stdout")
     diff_filename = None # will be given a str if there is need to compare and diff is found
-    if not write_golden:
+    if stdout_filename:
+        assert (not write_golden)
         write_file(stdout_filename, inspectee_stdout) # stdout could be ""
     if metadata["golden"] != None: # write or compare only if "golden" is not None
         golden_filename = metadata["golden"]
@@ -420,6 +420,7 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
             else:
                 exceptions.append(GOLDEN_NOT_WRITTEN_WRONG_EXIT)
         else: # compare stdout with golden
+            assert stdout_filename
             found_golden, stdout_comparison_diff = get_diff_html_str(
                 html_title = filepath_stem.split(os.sep)[-1],
                 platform_info = PLATFORM_INFO,
@@ -493,7 +494,7 @@ def remove_prev_log(log_dir: str) -> None:
 
 # Used by run_all()
 def print_post_processing_summary(
-    args: list, num_tasks: int, result_list: list, master_log_filepath: str) -> tuple:
+    args: Args, num_tasks: int, result_list: list, master_log_filepath: str) -> tuple:
     assert(len(result_list) == num_tasks)
     if args.write_golden:
         error_count, unique_error_count = count_and_print_for_golden_writing(
@@ -631,7 +632,7 @@ def run_one(input_args: list) -> dict:
         env_values.update(metadata["envs"])
     return run_one_impl(timer, log_dirname, write_golden, env_values, metadata)
 
-def run_all(args: list, metadata_list: list, unique_count: int) -> int:
+def run_all(args: Args, metadata_list: list, unique_count: int) -> int:
     remove_prev_log(args.log)
     num_tasks = len(metadata_list) # >= unique_count, because of repeating
     num_workers = 1 if args.sequential else min(num_tasks, NUM_WORKERS_MAX)
@@ -667,7 +668,7 @@ def valid_arg(arg: str) -> bool:
         for c in arg
     )
 def check_metadata_list_format(metadata_list: list) -> list: # not comprehensive
-    if type(metadata_list) != list:
+    if not isinstance(metadata_list, list):
         return [ "matadata file does not store a JSON array " ]
     errors = []
     for i, metadata in enumerate(metadata_list):
@@ -822,29 +823,6 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     expected, and if the file exists, the content will be different.
     You have to manually check the tests are correct before writing.
 
-\x1b[33m'--only':\x1b[0m
-    Use this option to run a subset of tests. The tests are marked by their
-    indexes in the list of tests provided by '--meta' or '--paths'.
-    The argument to the option is a comma-separated selectors:
-        '+' to add all, '-' to remove all, '+n' to add, '-n' to remove
-    * the index n starts at 0, then 1, 2, ..
-    * before adding or removing, the initial list is empty.
-    * a number 'n' without an +/- prefix is treated as '+n'.
-    * if the first character of the argument is '-', you should use the
-      escape sequence '\\-' instead, otherwise your terminal may treat it as
-      a commandline option.
-    For examples:
-        --only "+"               add all tests
-        --only "+5"              only add index 5
-        --only "5,6"             only add indexes 5 and 6
-        --only "+5,+6"           only add indexes 5 and 6
-        --only "+,-5"            add all, except index 5
-        --only "+,-5,-6"         add all, except indexes 5 and 6
-        --only "+5,+"            same as "+"
-        --only "+5,-,+6"         same as "+6"
-        --only "\\-,+5"           same as "+5"
-        --only "\\-,+5,-5,+6"     same as "+6"
-
 \x1b[33mExit status object:\x1b[0m
     A JSON object with keys:
     "type"  : string - "return", "timeout", "signal", "quit", "unknown"
@@ -898,8 +876,6 @@ def main():
                         help="load flakiness declaration files *.flaky under DIR")
     parser.add_argument("-w", "--write-golden", action="store_true",
                         help="write stdout to golden files instead of checking")
-    parser.add_argument("--only", metavar="\"+0,-1,+5..\"", type=str, default="",
-                        help="only run the selected tests (grammar in '--docs')")
     parser.add_argument("--docs", action="store_true",
                         help="self-documentation in more details")
     args = parser.parse_args()
@@ -949,56 +925,10 @@ def main():
     if len(metadata_list) == 0:
         sys.exit("[Error] no test found.")
 
-    # now we parse the "--only" option and add/remove tests from metadata_list;
-    # this step produces metadata_list_2
-    if not args.only:
-        metadata_list_2 = metadata_list
-    if len(args.only):
-        selectors = [ part for part in args.only.split(",") if len(part) ]
-        selected_indexes = set()
-        has_selector_error = False
-        for selector in selectors:
-            if selector.startswith("\\-"):
-                selector = selector[1:]
-            elif selector.isdigit():
-                selector = '+%s' % selector
-            # parse the selector
-            if selector == '+':
-                selected_indexes = set(range(len(metadata_list)))
-            elif selector == '-':
-                selected_indexes.clear()
-            elif selector[1:].isdigit():
-                target_index = int(selector[1:])
-                if not (0 <= target_index < len(metadata_list)):
-                    has_selector_error = True
-                    break
-                if selector.startswith('+'):
-                    if target_index in selected_indexes:
-                        sys.exit("[Index] index %d was already selected, "
-                                 "unable to add it" % target_index)
-                    selected_indexes.add(target_index)
-                elif selector.startswith('-') and selector[1:].isdigit():
-                    if target_index not in selected_indexes:
-                        sys.exit("[Index] index %d was not selected, "
-                                 "unable to remove it" % target_index)
-                    selected_indexes.remove(target_index)
-                else:
-                    has_selector_error = True
-                    break
-            else:
-                has_selector_error = True
-                break
-        if has_selector_error:
-            sys.exit("[Error] selector string invalid or index "
-                     "out of range: \"%s\", see '--docs'" % args.only)
-        if len(selected_indexes) == 0:
-            sys.exit("[Error] no test selected.")
-        metadata_list_2 = [ metadata_list[i] for i in selected_indexes ]
-
     # if args.write_golden == True, we ignore tests that do not have a golden file;
-    # this step produces metadata_list_3
+    # this step produces metadata_list_2
     if not args.write_golden:
-        metadata_list_3 = metadata_list_2
+        metadata_list_2 = metadata_list
     else:
         prompt = ("About to overwrite golden files of tests with their stdout.\n"
                   "Are you sure? [y/N] >> ")
@@ -1006,23 +936,23 @@ def main():
         if not IS_ATTY:
             print("%s" % consent)
         if consent.lower() == "y":
-            metadata_list_3 = [ m for m in metadata_list_2 if m["golden"] != None ]
-            ignored_tests_count = len(metadata_list_2) - len(metadata_list_3)
+            metadata_list_2 = [ m for m in metadata_list if m["golden"] != None ]
+            ignored_tests_count = len(metadata_list) - len(metadata_list_2)
             if ignored_tests_count > 0:
                 print("[Info] tests with no golden file specified "
                       "are ignored: %d" % ignored_tests_count)
         else:
             sys.exit("Aborted.")
-    if len(metadata_list_3) == 0:
+    if len(metadata_list_2) == 0:
         print("No golden file to write")
         sys.exit(0)
 
-    # here we add more fields to the metadata list; this step produces metadata_list_4
+    # here we add more fields to the metadata list; this step produces metadata_list_3
     # 1. take care of args.repeat; 2. take care of args.flakiness
-    metadata_list_4 = []
+    metadata_list_3 = []
     flakiness_dict = parse_flakiness_decls(args.flakiness)
-    unique_count = len(metadata_list_3)
-    for metadata in metadata_list_3:
+    unique_count = len(metadata_list_2)
+    for metadata in metadata_list_2:
         # case id is unique for every (path, args) combination
         comb_id = compute_comb_id(
             prog = metadata["path"],
@@ -1034,15 +964,15 @@ def main():
         for i in range(args.repeat): # if args.repeat != 1, then args.write_golden is False
             metadata_copy = copy.deepcopy(metadata)
             metadata_copy["repeat"] = { "count": i + 1, "all": args.repeat }
-            metadata_list_4.append(metadata_copy)
+            metadata_list_3.append(metadata_copy)
 
     # here we shuffle the tests
     if not args.write_golden:
         # if args.seed == None, use a system-provided randomness source
         random.seed(args.seed)
-        random.shuffle(metadata_list_4)
+        random.shuffle(metadata_list_3)
 
-    return run_all(args, metadata_list_4, unique_count)
+    return run_all(args, metadata_list_3, unique_count)
 
 if __name__ == "__main__":
     sys.exit(main())
