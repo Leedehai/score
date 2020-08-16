@@ -10,7 +10,7 @@
 
 import os
 import difflib
-from typing import Tuple
+from typing import Optional, Tuple
 
 MISSING_EXPECTED_FILE_HTML_FORMAT = "<div style='border:solid red 3px; width:80ch; padding:1ch'>\
 <b style='font-size:32px;color:red;text-align:center'>\
@@ -22,40 +22,46 @@ MISSING_EXPECTED_FILE_HTML_FORMAT = "<div style='border:solid red 3px; width:80c
 with open(os.path.join(os.path.dirname(__file__), "diff.html")) as f:
     DIFF_HTML_FORMAT = f.read()
 
+
 def get_size_str(filename: str) -> str:
     return "%d B" % os.path.getsize(filename)
 
+
 # return: (golden_file_found, html_string)
-def get_diff_html_str(
-    html_title: str, platform_info: dict, desc: str,
-    driver: str, command_invocation: str,
-    expected_filename: str, actual_filename: str) -> Tuple[bool, str]:
-    assert(actual_filename != None and expected_filename != None)
-    assert(os.path.isfile(actual_filename))
+def get_diff_html_str(html_title: str, platform_info: dict, desc: str,
+                      driver: str, command_invocation: str,
+                      expected_filename: str,
+                      actual_filename: str) -> Tuple[bool, Optional[str]]:
+    assert actual_filename != None and expected_filename != None
+    assert os.path.isfile(actual_filename)
     found_expected = os.path.isfile(expected_filename)
-    expected_lines = list(open(expected_filename, 'r')) if found_expected else []
+    expected_lines = list(open(expected_filename,
+                               'r')) if found_expected else []
     actual_lines = list(open(actual_filename, 'r'))
     if actual_lines == expected_lines:
-        return True, None # has golden file, same content
+        return True, None  # has golden file, same content
     feed_collection = [
-        html_title,  "<br>&nbsp;&nbsp;".join([
-            "%s: %s" % (k, v) for k, v in platform_info.items()
-        ]),
-        desc, driver, command_invocation,
+        html_title, "<br>&nbsp;&nbsp;".join(
+            ["%s: %s" % (k, v) for k, v in platform_info.items()]), desc,
+        driver, command_invocation,
         get_size_str(expected_filename) if found_expected else "not found",
-        os.path.abspath(expected_filename), os.path.relpath(expected_filename),
+        os.path.abspath(expected_filename),
+        os.path.relpath(expected_filename),
         get_size_str(actual_filename),
-        os.path.abspath(actual_filename), os.path.relpath(actual_filename)
+        os.path.abspath(actual_filename),
+        os.path.relpath(actual_filename)
     ]
-    html_differ = difflib.HtmlDiff(tabsize=4) # Do not set wrapcolumn
-    diff_str_as_html_table = html_differ.make_table(
-        expected_lines, actual_lines, context=False, numlines=5)
+    html_differ = difflib.HtmlDiff(tabsize=4)  # Do not set wrapcolumn
+    diff_str_as_html_table = html_differ.make_table(expected_lines,
+                                                    actual_lines,
+                                                    context=False,
+                                                    numlines=5)
     if not found_expected:
         # do not raise RuntimeError, because this is user's input error
         return False, DIFF_HTML_FORMAT % tuple((
             *feed_collection,
-            MISSING_EXPECTED_FILE_HTML_FORMAT.format(
-                filename = expected_filename) + diff_str_as_html_table,
-        )) # missing golden file, diff str
-    return True, DIFF_HTML_FORMAT % tuple((
-        *feed_collection, diff_str_as_html_table)) # has golden file, diff str
+            MISSING_EXPECTED_FILE_HTML_FORMAT.format(filename=expected_filename)
+            + diff_str_as_html_table,
+        ))  # missing golden file, diff str
+    return True, DIFF_HTML_FORMAT % tuple(
+        (*feed_collection, diff_str_as_html_table))  # has golden file, diff str

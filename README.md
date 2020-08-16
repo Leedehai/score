@@ -47,7 +47,17 @@ optional arguments:
 Unless '--docs' is given, exactly one of '--paths' and '--meta' is needed.
 ```
 
-The timer program can be compiled from [ctimer](https://github.com/Leedehai/ctimer), written in C++ with POSIX system calls, another project of mine. Of course, you can use your own timer program instead (e.g. one that can run on Windows), as long as its commandline interface meets what is laid out in `./score_run.py --docs`. 
+The timer program can be compiled from [ctimer](https://github.com/Leedehai/ctimer),
+written in C++ with POSIX system calls, another project of mine. Of course, you
+can use your own timer program instead (e.g. one that can run on Windows), as
+long as its commandline interface meets what is laid out in
+`./score_run.py --docs`.
+
+> Rewrite with [Go](https://golang.org)? Answer: not a priority, as the code
+spends about 84% time in `waitpid`, 4% time in IO `read`, and 4% time in lock
+acquiring (for stdout/stderr printing) - all of these costs are inherent
+to the logic. (Tested on Linux and macOS with a realistic workload using
+`python -m cProfile`).
 
 #### Testing
 Sanity test, which means the test is not complete.
@@ -131,11 +141,16 @@ The resulting website contains a expandable list of results, like this:
 
 #### Image resource copyright
 
-[check_logo_light.jpg](static/img/check_logo_light.jpg): from [this website](https://www.pinterest.com/pin/368802656984876731/), license unknown
+[check_logo_light.jpg](static/img/check_logo_light.jpg): from
+[this website](https://www.pinterest.com/pin/368802656984876731/), license
+unknown
 
 ### [diff_html_str.py](diff_html_str.py)
 
-Returns a valid HTML string that contains a table to render the diff view. Used by [score_run.py](score_run.py).
-> The HTML format is [diff.html](diff.html) - the placeholders are `%s` instead of `{slot_name}` because escaping `{` and `}` distorts the CSS definition statements.
+Returns a valid HTML string that contains a table to render the diff view. Used
+by [score_run.py](score_run.py).
+> The HTML format is [diff.html](diff.html) - the placeholders are `%s` instead
+of `{slot_name}` because escaping `{` and `}` distorts the CSS definition
+statements.
 
 ###### EOF
