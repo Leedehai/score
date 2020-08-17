@@ -507,7 +507,7 @@ def count_and_print_for_test_running(result_list: list,
     return error_result_count, len(unique_error_tests)
 
 
-class global_lock:  # across child processes
+class global_lock:
     def __init__(self):
         pass
 
@@ -575,11 +575,11 @@ def run_one_impl(timer: str, log_dirname: str, write_golden: bool,
         # [1] I wrote a Python program to verify this. I set the timeout
         #     to be 10 msec and give it a infinite-loop program, when it
         #     times out the reported time usage is 14 msec, way over 10.
-        stdout = subprocess.check_output([timer, metadata["path"]] +
-                                         metadata["args"],
-                                         stderr=subprocess.DEVNULL,
-                                         env=env_values)
-        stdout = stdout.decode().rstrip()
+        o = subprocess.check_output([timer, metadata["path"]] +
+                                    metadata["args"],
+                                    stderr=subprocess.DEVNULL,
+                                    env=env_values)
+        stdout = o.decode(errors="backslashreplace").rstrip()
         end_abs_time = time.time()
     except subprocess.CalledProcessError as e:
         # The code path signals an internal error of the timer (see '--docs').
