@@ -4,14 +4,13 @@
 #
 # File: score_run.py
 # ---------------------------
-# Run tests with timer, logging, and HTML diff view (if any).
 # For more information, see README.md.
 # For help: use '--help' and '--docs'.
 
 import sys
 py = sys.version_info
-if py.major == 2 or (py.major == 3 and py.minor < 5):
-    sys.exit("[Error] mininum Python version is 3.5")
+if py.major == 2 or (py.major == 3 and py.minor < 7):
+    sys.exit("[Error] mininum Python version is 3.7")
 
 import argparse
 import collections
@@ -28,18 +27,20 @@ import shutil
 import signal
 import subprocess
 import time
-from typing import List
+from typing import List, Optional
 
-import score_utils
-import rotating_logger
-from score_utils import info_s, error_s
-from diff_html_str import get_diff_html_str
-from flakiness import parse_flakiness_decls
-from result_dict import generate_result_dict
-from rotating_logger import LogAction, LogMessage
-
-# avoid *.pyc of imported modules
-sys.dont_write_bytecode = True
+from pylibs import score_utils
+from pylibs import rotating_logger
+from pylibs.rotating_logger import (
+    LogAction,
+    LogMessage,
+)
+from pylibs.docs import EXPLANATION_STRING
+from pylibs.diff_html_str import get_diff_html_str
+from pylibs.flakiness import parse_flakiness_decls
+from pylibs.result_dict import generate_result_dict
+from pylibs.score_utils import info_s, error_s
+from pylibs import schema
 
 LOG_FILE_BASE = "log.json"
 CTIMER_DELIMITER_ENVKEY = "CTIMER_DELIMITER"
@@ -80,9 +81,8 @@ GOLDEN_FILE_MISSING = "golden file missing"
 
 
 # Set signal handlers
-def sighandler(sig, frame):
-    # Do not print: it's ugly for all workers to print together
-    sys.exit(1)
+def sighandler(sig, frame):  # pylint: disable=unused-argument
+    sys.exit(1)  # Do not print: it's ugly if all workers print simutaneously.
 
 
 signal.signal(signal.SIGINT, sighandler)  # type: ignore
@@ -153,22 +153,20 @@ def compute_comb_id(prog: str, args: list, envs: dict) -> str:
     prog_dir_basename = os.path.basename(
         os.path.dirname(prog))  # "" if prog doesn't contain '/'
     path_repr = os.path.join(prog_dir_basename, prog_basename)
-    case_hash = '0' * CASE_ID_HASH_LEN
+    hashed = '0' * CASE_ID_HASH_LEN
     if len(args) > 0 or len(envs) > 0:
-        items_to_hash = args + [("$%s=%s" % (k, envs[k]))
-                                for k in sorted(envs.keys())]
-        case_hash = hashlib.sha1(
+        items_to_hash = args + [("%s=%s" % (k, envs[k])) for k in sorted(envs)]
+        hashed = hashlib.sha1(
             ' '.join(items_to_hash).encode()).hexdigest()[:CASE_ID_HASH_LEN]
-    return "%s-%s" % (path_repr, case_hash.lower())
+    return "%s-%s" % (path_repr, hashed.lower())
 
 
 # This path stem (meaning there is no extension such as ".diff") is made of the
 # comb_id, repeat count, log_dirname. E.g.
 # comb_id = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
 #   => return: "./out/foo/logs/bar/foo-0ade7c2c-3"
-def get_logfile_path_stem(
-        comb_id: str, repeat_count: int, log_dirname: str
-) -> str:  # "stem" means no extension name such as ".diff"
+def get_logfile_path_stem(comb_id: str, repeat_count: int,
+                          log_dirname: str) -> str:
     return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
 
 
@@ -184,32 +182,30 @@ def print_test_running_result_to_stderr(result: dict, timer: str) -> None:
                                                             result,
                                                             indent=2)
     if result["ok"] == True or result["error_is_flaky"] == True:
-        pass
+        return
+    assert result["ok"] == False
+    result_exceptions = result["exceptions"]
+    if len(result_exceptions) > 0:
+        assert (len(result_exceptions) == 1
+                and result_exceptions[0] == GOLDEN_FILE_MISSING)
+        error_summary = "%s: %s" % (GOLDEN_FILE_MISSING,
+                                    os.path.relpath(
+                                        result["stdout"]["golden_file"]))
     else:
-        assert result["ok"] == False
-        result_exceptions = result["exceptions"]
-        if len(result_exceptions) > 0:
-            assert (len(result_exceptions) == 1
-                    and result_exceptions[0] == GOLDEN_FILE_MISSING)
-            error_summary = "%s: %s" % (GOLDEN_FILE_MISSING,
-                                        os.path.relpath(
-                                            result["stdout"]["golden_file"]))
-        else:
-            error_summary = get_error_summary(result)
-            error_summary = '\n'.join([
-                "  %s: %s" % (k, v) for k, v in error_summary.items()
-                if v != None
-            ])
-        if result["repeat"]["all"] > 1:
-            repeat_report = " (repeat %d/%d)" % (result["repeat"]["count"],
-                                                 result["repeat"]["all"])
-        else:
-            repeat_report = ""
-        sys.stderr.write(
-            UNEXPECTED_ERROR_FORMAT.format(desc=result["desc"],
-                                           repeat=repeat_report,
-                                           error_summary=error_summary,
-                                           rerun_command=rerun_command))
+        error_summary = get_error_summary(result)
+        error_summary = '\n'.join([
+            "  %s: %s" % (k, v) for k, v in error_summary.items() if v != None
+        ])
+    if result["repeat"]["all"] > 1:
+        repeat_report = " (repeat %d/%d)" % (result["repeat"]["count"],
+                                             result["repeat"]["all"])
+    else:
+        repeat_report = ""
+    sys.stderr.write(
+        UNEXPECTED_ERROR_FORMAT.format(desc=result["desc"],
+                                       repeat=repeat_report,
+                                       error_summary=error_summary,
+                                       rerun_command=rerun_command))
 
 
 # when using '--write-golden'
@@ -563,216 +559,27 @@ def run_all(args: Args, metadata_list: list, unique_count: int) -> int:
     return 0 if error_count == 0 else 1
 
 
-NEEDED_METADATA_OBJECT_FIELD = [
-    # sync with EXPLANATION_STRING's spec
-    "desc",
-    "path",
-    "args",
-    "golden",
-    "timeout_ms",
-    "envs",
-    "exit",
-]
-NEEDED_EXIT_STATUS_OBJECT_FILED = [
-    # sync with EXPLANATION_STRING's spec
-    "type",
-    "repr",
-]
-VALID_ARG_SPECIAL_CHARS = "._+-*/=^@#"  # sync with EXPLANATION_STRING's spec
-
-
-def valid_arg(arg: str) -> bool:
-    return all((c.isalnum() or c in VALID_ARG_SPECIAL_CHARS) for c in arg)
-
-
-def check_metadata_list_format(
-        metadata_list: list) -> list:  # not comprehensive
-    if not isinstance(metadata_list, list):
-        return ["matadata file does not store a JSON array "]
-    errors = []
-    for i, metadata in enumerate(metadata_list):
-        if not isinstance(metadata, dict):
-            errors.append("metadata #%-2d is not a JSON object" % (i + 1))
-            continue
-        for needed_metadata_field in NEEDED_METADATA_OBJECT_FIELD:
-            if needed_metadata_field not in metadata:
-                errors.append("metadata #%-2d does not contain field \"%s\"" %
-                              (i + 1, needed_metadata_field))
-        if "args" in metadata:
-            args = metadata["args"]
-            if not isinstance(args, list):
-                errors.append("metadata #%-2d field \"args\" is not an array" %
-                              (i + 1))
-            elif next((e for e in args if not valid_arg(e)), None) != None:
-                errors.append("metadata #%-2d field \"args\" contains "
-                              "invalid character" % (i + 1))
-        if "timeout_ms" in metadata:
-            timeout_ms = metadata["timeout_ms"]
-            if timeout_ms == None:
-                pass
-            else:
-                if (not isinstance(timeout_ms, int)) or timeout_ms <= 0:
-                    errors.append("metadata #%-2d field \"timeout_ms\" "
-                                  "is not a positive number" % (i + 1))
-        if "envs" in metadata:
-            envs = metadata["envs"]
-            if envs == None:
-                pass
-            else:
-                if not isinstance(metadata["envs"], dict):
-                    errors.append(
-                        "metadata #%-2d field \"envs\" is not a dict" % (i + 1))
-                else:
-                    if any((not isinstance(k, str)) or ' ' in k
-                           for k in envs.keys()):
-                        errors.append("metadata #%-2d field \"envs\" requires "
-                                      "keys to be strings without spaces" %
-                                      (i + 1))
-                    if any((not isinstance(v, str)) or ' ' in v
-                           for v in envs.values()):
-                        errors.append("metadata #%-2d field \"envs\" requires "
-                                      "values to be strings without spaces" %
-                                      (i + 1))
-        if "exit" in metadata:
-            for needed_exit_status_field in NEEDED_EXIT_STATUS_OBJECT_FILED:
-                if needed_exit_status_field not in metadata["exit"]:
-                    errors.append("metadata #%-2d's \"exit\" object "
-                                  "does not contain field \"%s\"" %
-                                  ((i + 1), needed_exit_status_field))
-    return errors
-
-
-EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
-
-\x1b[33m'--timer':\x1b[0m
-    It passes the path of a timer program that measures a program's processor
-    time (not wall time) with timeout. The program's interface satisfies:
-    [example] https://github.com/Leedehai/ctimer (mine)
-    inputs:
-        commandline arguments:
-            the invocation of the inspected program
-        environment variable CTIMER_TIMEOUT:
-            timeout value (ms); 0 means effectively infinite time
-        environment variable CTIMER_STATS:
-            file path to write stats report; if not given, print to stdout
-        environment variable CTIMER_DELIMITER:
-            delimiter string at the beginning and end of the stats report
-            string (see below); if not given, use empty string
-        * the script will set the environment variables as needed locally
-          when invoking the timer program
-    outputs: the inspected program's outputs (stdout, stderr), with stats
-        report in stdout if CTIMER_STATS is unspecified; if CTIMER_STATS
-        is specified, the stats report will be written to that file
-    stats report: a JSON string, representing an object:
-        "exit"     : exit status object (see below), inspectee's exit status
-        "times_ms" : object:
-            "proc"      : floating point, inspectee's time on processor
-            "abs_start" : floating point, absolute start time since Epoch
-            "abs_end"   : floating point, absolute end time since Epoch
-    others:
-        * the timer should always exit with 0 regardless of the inspected
-          program's exit status; non-0 exit is reserved for internal error.
-        * the timer should pass whatever environment variables it has to
-          the inspected program.
-
-\x1b[33m'--meta':\x1b[0m
-    This option passes the path of a file containing the metadata of tests.
-    The metadata file could be either hand-written or script-generated; it
-    stores in JSON format an array of metadata objects. Each has keys:
-        "desc"    : string
-            description of the test
-        \x1b[33m=== parameters contolling command invocation ===\x1b[0m
-        "path"    : string
-            path to the test executable binary
-        "args"    : array of strings
-            the commandline arguments, all characters are alphanumeric or
-            one of "._+-*/=^@#"
-        "envs"  : dict or null
-            environment variables provided when running the test executable
-            * each entry's key and value are strings without spaces
-        \x1b[33m=== parameters controlling test checking ===\x1b[0m
-        "golden"  : string or null
-            path to the golden file; null: not needed
-            * if the golden file path is given, the inspectee's stdout
-              will be compared with the golden file content
-            * if '--write-golden' is given, inspectee's stdout is written
-              to this file
-            * different tests should have different golden files, even if
-              their contents are the same, to avoid possible data racing
-              when writing the files for '--write-golden'
-        "timeout_ms" : integer or null
-            the max processor time (ms) allowed; null: effectively infinite
-        "exit"    : exit status object (see below), storing the expected exit
-    * all paths are relative to the current working directory
-    * mutually exclusive: --meta, --paths
-
-\x1b[33m'--paths':\x1b[0m
-    In cases where only the paths of the test executables matter, prefer this
-    option over '--meta', as it can be invoked with a list of space-separated
-    test executable paths in commandline. Other fields required by a metadata
-    object (see above) of each test will automatically get these values:
-        desc = "", path = (the path provided with this option),
-        args = [], envs = null, golden = null, timeout_ms = null,
-        exit = { "type": "return", "repr": 0 } (exit status, see below)
-    * mutually exclusive: --meta, --paths
-
-\x1b[33m'--flakiness':\x1b[0m
-    Not unusually, some tests are flaky (e.g. due to CPU scheduling or a bug
-    in language runtime). Use this option to specify a directory that stores
-    all declaration files. Under this directory, all files whose names match
-    the glob pattern "*.flaky" will be loaded.
-    In a declaration file, characters following '#' in a line are treated as
-    comments. Each non-comment line is a flakiness declaration entry with
-    space-separated string fields in order:
-        1. test executable path (last two path components joined with '/')
-        2. case id hash string (computed from commandline arguments and
-           alphabetically-sorted environment variables) as appeared on the
-           corresponding result object.
-        3. type of expected error: one or more (joined by '|': non-exclusive
-           'or') of WrongExitCode, Timeout, Signal, StdoutDiff, Others
-        * you should ensure the field 1 of each entry is unique across all
-          flakiness declaration files
-        * joining the fields 1 and 2 with '-' produces the 'comb_id' (the ID
-          for each unique path + args combination) in each result object in
-          the master log
-        * e.g.: a line could be "foo/bar-test 00000000 Timeout|StdoutDiff",
-          and its 'comb_id' in the master log is "foo/bar-test-00000000"
-
-\x1b[33m'--write-golden':\x1b[0m
-    Use this option to create or overwrite golden files of tests. Tests with
-    golden file unspecified (i.e. metadata's "golden" field is null) won't
-    be executed.
-    A golden file will be written only if the exit status of that test is as
-    expected, and if the file exists, the content will be different.
-    You have to manually check the tests are correct before writing.
-
-\x1b[33mExit status object:\x1b[0m
-    A JSON object with keys:
-    "type"  : string - "return", "timeout", "signal", "quit", "unknown"
-    "repr"  : integer, indicating the exit code for "return" exit, timeout
-              limit (millisec, processor time) for "timeout" exit, signal
-              value for "signal" exit, and null for others (timer errors)
-
-\x1b[33mMaster log and result object:\x1b[0m
-    The master log is a JSON file containing an array of result objects. To
-    see the specification of the result object, please refer to the in-line
-    comments in function `generate_result_dict()`.
-    The master log is human-readable, but is more suited to be loaded and
-    rendered by a script.
-
-\x1b[33mMore on concepts:\x1b[0m
-    metadata        description of a test: program path, arguments, ...
-    golden file     the file storing the expected stdout output, nullable
-    master log      a JSON file log.json under the log directory
-    log directory   specified by '--log', which stores the master log
-                    and tests' stdout and diff, if any, among others
-
-\x1b[33mMore on options:\x1b[0m
-    Complete list of options: "--help".
-    Concurrency is enabled, unless '--sequential' is given.
-    Unless '--help' or '--docs' is given:
-        * '--timer' is needed, and
-        * exactly one of '--paths' and '--meta' is needed."""
+def validate_metadata_schema_noexcept(
+        metadata_list: list) -> Optional[str]:  # Error explanation, None if OK.
+    try:
+        schema.Schema([{  # sync with EXPLANATION_STRING's spec
+            "desc": str,
+            "path": str,
+            "args": [str],
+            "golden": schema.Or(str, None),
+            "timeout_ms": schema.And(int, lambda v: v > 0),
+            "envs": {schema.Optional(str): str},
+            "exit": {
+                "type": schema.Or("return", "timeout", "signal", "quit",
+                                  "unknown"),
+                "repr": int,
+                schema.Optional(str): object,  # Allow more fields, if any.
+            },
+            schema.Optional(str): object,  # Allow more fields, if any.
+        }]).validate(metadata_list)
+        return None
+    except schema.SchemaError as e:  # Carries explanations.
+        return str(e)
 
 
 def main():
@@ -871,19 +678,19 @@ def main():
                 metadata_list = json.load(f)
             except ValueError:
                 sys.exit(error_s("not a valid JSON file: %s" % args.meta))
-            errors = check_metadata_list_format(metadata_list)  # sanity check
-            if errors and len(errors) > 0:
+            error_str = validate_metadata_schema_noexcept(metadata_list)
+            if error_str:
                 sys.exit(
-                    error_s("metadata is bad, checkout '--docs' "
-                            "for requirements:\n\t" + "\n\t".join(errors)))
+                    error_s("metadata format is bad; check out '--docs'\n\t%s" %
+                            error_str))
     else:  # Should not reach here; already checked by option filtering above
         raise RuntimeError("Should not reach here")
 
-    if len(metadata_list) == 0:
+    if metadata_list == None or len(metadata_list) == 0:
         sys.exit(error_s("no test found."))
 
-    # If args.write_golden == True, ignore tests that do not have a golden file;
-    # this step produces metadata_list_2
+    # If args.write_golden == True, ignore tests that do not have a golden file
+    # path, because there is no need to run these tests.
     ignore_metadata_indexes = []
     if args.write_golden:
         prompt = (
@@ -926,7 +733,6 @@ def main():
             }
             metadata_list_processed.append(metadata_copy)
 
-    # Shuffle the tests randomly.
     if not args.write_golden:
         # if args.seed == None, use a system-provided randomness source
         random.seed(args.seed)
