@@ -54,10 +54,9 @@ long as its commandline interface meets what is laid out in
 `./score_run.py --docs`.
 
 > Rewrite with [Go](https://golang.org)? Answer: not a priority, as the code
-spends about 84% time in `waitpid`, 4% time in IO `read`, and 4% time in lock
-acquiring (for stdout/stderr printing) - all of these costs are inherent
-to the logic. (Tested on Linux and macOS with a realistic workload using
-`python -m cProfile`).
+spends about 77% time in `waitpid`, 7% time in IO `read`, and 6% time in lock
+acquiring - all of these costs are inherent to the logic. (Tested on Linux using
+`python -m cProfile ..`).
 
 #### Testing
 Sanity test, which means the test is not complete.

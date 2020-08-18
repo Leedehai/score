@@ -7,12 +7,6 @@
 # Run tests with timer, logging, and HTML diff view (if any).
 # For more information, see README.md.
 # For help: use '--help' and '--docs'.
-# NOTE all non-help messages are printed to stderr because stderr is
-#      unbuffered by default so it works well with multiprocessing.
-#
-# Migrated from Python2.7; new features not all applied yet.
-# Type hinting does not use the module 'typing', because importing it
-# entails runtime overhead in early releases of Python3.
 
 import sys
 py = sys.version_info
@@ -34,12 +28,15 @@ import shutil
 import signal
 import subprocess
 import time
+from typing import List
 
 import score_utils
+import rotating_logger
 from score_utils import info_s, error_s
 from diff_html_str import get_diff_html_str
 from flakiness import parse_flakiness_decls
 from result_dict import generate_result_dict
+from rotating_logger import LogAction, LogMessage
 
 # avoid *.pyc of imported modules
 sys.dont_write_bytecode = True
@@ -112,29 +109,22 @@ def get_metadata_from_path(path: str) -> dict:
 # in Python: KeyboardInterrupt cannot cleanly kill mp.Pool()'s child processes,
 # printing verbosely: https://stackoverflow.com/a/6191991/8385554
 # NOTE each 'func' has to ignore SIGINT for the aforementioned fix to work
-# NOTE do not use 'threading' due to GIL (global interpreter lock)
-def pool_map(num_workers: int, func, inputs: list) -> list:
-    def init_shared_mem(lock, queue, count):
-        global g_lock
-        g_lock = lock
-        global g_queue
-        g_queue = queue
-        global g_count
-        g_count = count
-
-    l = mp.Lock()
-    q, c = mp.Queue(5), mp.Value('i', 0)
-    pool = mp.Pool(num_workers, initializer=init_shared_mem, initargs=(l, q, c))
-    try:
-        res = pool.map(func, inputs)
-        clear_rotating_log(q)
-    except KeyboardInterrupt:
-        pool.terminate()
+def pool_map(num_workers: int, func, inputs: List[tuple]) -> list:
+    with rotating_logger.logging_server():
+        pool = mp.Pool(num_workers)
+        try:
+            res = pool.map(func, inputs)
+        except KeyboardInterrupt:
+            pool.terminate()
+            pool.join()
+            sys.exit("Process pool terminated and child processes joined")
+        pool.close()
         pool.join()
-        sys.exit("Process pool terminated and child processes joined")
-    pool.close()
-    pool.join()
-    return res
+        # This should be called after worker threads are joined to avoid
+        # race condition. We don't send a clear command via socket, because
+        # that may arrive at the socket after the logging server is closed.
+        rotating_logger.clear_all_transient_logs()
+        return res
 
 
 def split_ctimer_out(s: str) -> tuple:
@@ -394,27 +384,19 @@ def print_one_on_the_fly(metadata: dict, run_one_single_result: dict) -> None:
         else:  # definite error
             should_stay_on_console = True
             status_head = "\x1b[33;1merror\x1b[0m"
-    with global_lock():
-        # keep runtime overhead here as small as possible
-        g_count.value += 1
-        error_summary = get_error_summary(run_one_single_result)
-        if should_stay_on_console:  # definite error, details will be printed after all execution
-            logline = "%s %3s %s\n\x1b[2m%s\x1b[0m\n" % (
-                status_head, g_count.value, metadata_desc, '\n'.join([
-                    "  %s: %s" % (k, v)
-                    for k, v in error_summary.items() if v != None
-                ]))
-            clear_rotating_log(g_queue)
-            sys.stderr.write(logline)
-        else:  # definite success, flaky success, flaky error
-            logline = cap_width(
-                "%s %3s %s" %
-                (status_head, g_count.value, metadata_desc)) + '\n'
-            add_rotating_log(g_queue, logline)
-            time.sleep(
-                0.05
-            )  # let the line stay for a while: prettier, though adding overhead
-        sys.stderr.flush()
+    error_summary = get_error_summary(run_one_single_result)
+    if should_stay_on_console:  # definite error, details will be printed after all execution
+        proper_text = "%s\n\x1b[2m%s\x1b[0m\n" % (metadata_desc, '\n'.join([
+            "  %s: %s" % (k, v) for k, v in error_summary.items() if v != None
+        ]))
+        rotating_logger.send_log(
+            LogMessage.serialize(LogAction.ADD_PERSISTENT, status_head,
+                                 proper_text))
+    else:  # definite success, flaky success, flaky error
+        proper_text = cap_width(metadata_desc) + '\n'
+        rotating_logger.send_log(
+            LogMessage.serialize(LogAction.ADD_TRANSIENT, status_head,
+                                 proper_text))
 
 
 # Used by run_all()
@@ -507,58 +489,6 @@ def count_and_print_for_test_running(result_list: list,
     return error_result_count, len(unique_error_tests)
 
 
-class global_lock:
-    def __init__(self):
-        pass
-
-    def __enter__(self):
-        g_lock.acquire()
-
-    def __exit__(self, etype, value, traceback):
-        g_lock.release()
-
-
-# http://ascii-table.com/ansi-escape-sequences.php
-# must be protected by a lock: make qsize() reliable
-def add_rotating_log(q, s: str) -> None:
-    try:
-        temp_arr, original_qsize = [], q.qsize()
-        if q.full():
-            q.get()
-        while q.qsize() > 0:  # empty() is unreliable: nasty Python
-            e = q.get()
-            temp_arr.append(e)
-        sys.stderr.write(  # cursor moves up and clear entire line
-            "\x1b[1A\x1b[2K" * original_qsize + "\x1b[?25l"  # hide cursor
-            + ''.join(temp_arr + [s]) + "\x1b[?25h"  # show cursor
-        )
-        for e in temp_arr:
-            q.put(e)
-        q.put(s)
-    # To prevent a broken pipe error. This error is raised when the queue
-    # is garbage-collected by the process that created it, while the current
-    # process still has a thread that wants to access it. We just use the
-    # queue to print logs to console for prettiness, so it is fine to just
-    # ignore the error without compromising the program's correctness.
-    # https://stackoverflow.com/questions/36359528/broken-pipe-error-with-multiprocessing-queue
-    # Python2 uses IOError, but Python3 uses BrokenPipeError which is a
-    # subclass of OSError not IOError (in Python3 IOError is merged into
-    # OSError), and BrokenPipeError does not exist in Python2. Nasty Python.
-    except (IOError, OSError):
-        pass
-
-
-def clear_rotating_log(q):
-    try:
-        cur_size = q.qsize()
-        for _ in range(cur_size):
-            sys.stderr.write(
-                "\x1b[1A\x1b[2K")  # cursor moves up and clears entire line
-            q.get()
-    except (IOError, OSError):  # see reason in add_rotating_log()
-        pass
-
-
 # Used by run_one()
 def run_one_impl(timer: str, log_dirname: str, write_golden: bool,
                  env_values: dict, metadata: dict) -> dict:
@@ -626,8 +556,7 @@ def run_all(args: Args, metadata_list: list, unique_count: int) -> int:
     create_dir_if_needed(args.log)
     master_log_filepath = os.path.join(args.log, LOG_FILE_BASE)
     with open(master_log_filepath, 'w') as f:
-        json.dump(result_list, f, indent=2,
-                  separators=(",", ": "))  # sorted already
+        json.dump(result_list, f, indent=2, separators=(",", ": "))  # Sorted.
     error_count, _ = print_post_processing_summary(
         args, num_tasks, result_list, master_log_filepath,
         time.time() - run_tests_start_time)
@@ -642,12 +571,12 @@ NEEDED_METADATA_OBJECT_FIELD = [
     "golden",
     "timeout_ms",
     "envs",
-    "exit"
+    "exit",
 ]
 NEEDED_EXIT_STATUS_OBJECT_FILED = [
     # sync with EXPLANATION_STRING's spec
     "type",
-    "repr"
+    "repr",
 ]
 VALID_ARG_SPECIAL_CHARS = "._+-*/=^@#"  # sync with EXPLANATION_STRING's spec
 
