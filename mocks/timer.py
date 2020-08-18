@@ -34,6 +34,7 @@ INSPECTEE_STDOUT_RAW_TWEAKED = INSPECTEE_STDOUT_RAW\
 
 STATS_JSON = """{
     "pid" : 35871,
+    "maxrss_kb": 1000,
     "exit" : {
         "type" : "%s",
         "repr" : %d,
@@ -45,10 +46,10 @@ STATS_JSON = """{
 }"""
 
 env_var = os.environ.get("ENV_VAR", None)
-assert(env_var and env_var == "1")
+assert (env_var and env_var == "1")
 
 args = sys.argv[1:]
-assert(len(args) >= 1)
+assert (len(args) >= 1)
 if args[0] == "timeout.exe":
     if len(args) == 2 and args[1] == "--print":
         print(INSPECTEE_STDOUT_RAW)

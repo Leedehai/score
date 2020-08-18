@@ -123,7 +123,7 @@ def _disabled_case_html(disabled_cases: List[dict]):
 
 
 def _populate_test_results_table(results: List[dict], start_time_min: float,
-                                 whole_time: float, html_dir: str,
+                                 whole_time: float, html_dir: Path,
                                  has_golden_file: bool) -> str:
     """
     Generate an HTML table for all results for one test.
@@ -133,13 +133,15 @@ def _populate_test_results_table(results: List[dict], start_time_min: float,
     """
     row_list = []  # list of str
     row_list.append(
-        TableRowBuilder("th").add_data_cell("#").add_data_cell(
-            "result").add_data_cell("runtime",
-                                    tooltip="time on processor").add_data_cell(
-                                        "exit", tooltip="how program exited").
-        add_data_cell("exit ok").add_data_cell("stdout").add_data_cell(
-            "stdout diff").add_data_cell("stdout ok").add_data_cell(
-                "timeline", tooltip="start/end time vs all tests").done())
+        TableRowBuilder("th").add_data_cell("#").add_data_cell("result") \
+            .add_data_cell("runtime", tooltip="time on processor") \
+            .add_data_cell("max. rss.", tooltip="maximum resident set size") \
+            .add_data_cell("exit", tooltip="how program exited") \
+            .add_data_cell("exit ok").add_data_cell("stdout") \
+            .add_data_cell("stdout diff") \
+            .add_data_cell("stdout ok") \
+            .add_data_cell("timeline", tooltip="start/end time vs all tests") \
+            .done())
     file_size_str = lambda size: "0" if size == 0 else ("%.2f" % size)
     for result in results:
         half_baked_row = (
@@ -150,15 +152,15 @@ def _populate_test_results_table(results: List[dict], start_time_min: float,
                     class_names=_result_cell_ternary(result, "success", "error",
                                                      "error_but_flaky"),
                 )  # result
-            .add_data_cell(
-                "%d ms" %
-                result["times_ms"]["proc"],  # runtime (processor time)
-            )  # result
+            .add_data_cell("%d ms" % result["times_ms"]["proc"],
+                           )  # runtime (processor time)
+            .add_data_cell("%.1f MB" % (result["maxrss_kb"] / 1024.0),
+                           )  # max. rss.
             .add_data_cell(_searialize_exit_object(
                 result["exit"]["real"]))  # exit
             .add_data_cell(str(result["exit"]["ok"]).lower())  # exit ok
             .add_href_cell(  # stdout
-                os.path.relpath(result["stdout"]["actual_file"], html_dir),
+                os.path.relpath(result["stdout"]["actual_file"], str(html_dir)),
                 text="stdout",
                 comment="%s KB" % file_size_str(
                     os.path.getsize(result["stdout"]["actual_file"]) / 1024.0),
@@ -167,7 +169,7 @@ def _populate_test_results_table(results: List[dict], start_time_min: float,
             half_baked_row = half_baked_row.add_data_cell("-")  # stdout diff
         else:
             half_baked_row = half_baked_row.add_href_cell(  # stdout diff
-                os.path.relpath(result["stdout"]["diff_file"], html_dir),
+                os.path.relpath(result["stdout"]["diff_file"], str(html_dir)),
                 text="diff",
                 comment="%s KB" % file_size_str(
                     os.path.getsize(result["stdout"]["diff_file"]) / 1024.0))
@@ -187,7 +189,7 @@ def _populate_entries_view(*,
                            timer_program: str,
                            start_time_min: float,
                            whole_time: float,
-                           html_dir: str,
+                           html_dir: Path,
                            working_directory: Optional[str] = None) -> str:
     """
     Generate HTML pice for each entry. Each entry is a test, potentially
@@ -201,7 +203,7 @@ def _populate_entries_view(*,
     # Can use itertools.groupby() because the list is sorted.
     result_iter = itertools.groupby(sorted_test_results,
                                     lambda e: e["comb_id"] + e["desc"])
-    for k, g in result_iter:
+    for _, g in result_iter:
         results_for_one_test = sorted(list(g),
                                       key=lambda e: e["repeat"]["count"])
         command_invocation = score_utils.make_command_invocation_str(
@@ -210,12 +212,19 @@ def _populate_entries_view(*,
             indent=2,
             working_directory=working_directory,
         )
-        known_flaky_errors, flaky_errors = "false", results_for_one_test[0][
-            "flaky_errors"]
-        if len(flaky_errors):
+        known_flaky_errors = "false"
+        flaky_errors = results_for_one_test[0]["flaky_errors"]
+        if len(flaky_errors) > 0:
             known_flaky_errors = ", ".join(flaky_errors)
-        average_runtime_ms = statistics.mean(e["times_ms"]["proc"]
+        only_one_data_point = len(results_for_one_test) < 2
+        runtime_ms_average = statistics.mean(e["times_ms"]["proc"]
                                              for e in results_for_one_test)
+        runtime_ms_stddev = 0 if only_one_data_point else statistics.stdev(
+            e["times_ms"]["proc"] for e in results_for_one_test)
+        maxrss_kb_average = statistics.mean(e["maxrss_kb"]
+                                            for e in results_for_one_test)
+        maxrss_kb_stddev = 0 if only_one_data_point else statistics.stdev(
+            e["maxrss_kb"] for e in results_for_one_test)
         golden_file_or_none = results_for_one_test[0]["stdout"]["golden_file"]
         results_table_html = _populate_test_results_table(
             results_for_one_test,
@@ -237,7 +246,10 @@ def _populate_entries_view(*,
             success_count=sum(1 for e in results_for_one_test if e["ok"]),
             flaky_error_count=sum(1 for e in results_for_one_test
                                   if e["error_is_flaky"]),
-            average_runtime="%d" % average_runtime_ms,
+            average_runtime="%.1f ± %.1f" %
+            (runtime_ms_average, runtime_ms_stddev),
+            average_maxrss_mb="%.1f ± %.1f" %
+            (maxrss_kb_average / 1024.0, maxrss_kb_stddev / 1024.0),
             attempts_report_table=results_table_html,
         )
         entries_view_html_list.append(test_entry_html)
@@ -289,7 +301,6 @@ def _generate_web_view_impl(*,
                             timer_program: str,
                             test_dir: Path,
                             html_dir: Path,
-                            html_file_path: Path,
                             working_directory: Optional[str] = None) -> None:
     error_task_count, start_time_min, end_time_max = 0, float("Infinity"), 0
     for e in sorted_test_results:  # one pass iteration
@@ -355,7 +366,6 @@ def generate_web_view(*,
         timer_program=timer_program,
         test_dir=test_dir,
         html_dir=html_dir,
-        html_file_path=html_file_path,
         working_directory=working_directory,
     )
     return str(html_file_path)

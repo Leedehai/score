@@ -23,11 +23,12 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
         report in stdout if CTIMER_STATS is unspecified; if CTIMER_STATS
         is specified, the stats report will be written to that file
     stats report: a JSON string, representing an object:
-        "exit"     : exit status object (see below), inspectee's exit status
-        "times_ms" : object:
-            "proc"      : floating point, inspectee's time on processor
-            "abs_start" : floating point, absolute start time since Epoch
-            "abs_end"   : floating point, absolute end time since Epoch
+        "maxrss_kb" : integer, maximum resident set size (KB)
+        "exit"      : exit status object (see below), inspectee's exit status
+        "times_ms"  : object:
+            "proc"      : floating point, inspectee's time (ms) on processor
+            "abs_start" : floating point, absolute start time (ms) since Epoch
+            "abs_end"   : floating point, absolute end time (ms) since Epoch
     others:
         * the timer should always exit with 0 regardless of the inspected
           program's exit status; non-0 exit is reserved for internal error.

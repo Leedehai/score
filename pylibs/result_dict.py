@@ -59,6 +59,8 @@ def generate_result_dict(metadata: dict, ctimer_reports: dict, match_exit: bool,
         ("flaky_errors",
          metadata["flaky_errors"]),  # list of str, the expected errors
         ("repeat", metadata["repeat"]),  # dict { "count": int, "all": int }
+        # memory usage measurements
+        ("maxrss_kb", ctimer_reports["maxrss_kb"]),
         # time measurements
         ("timeout_ms", metadata["timeout_ms"]
          if metadata["timeout_ms"] != None else INFINITE_TIME),  # int
