@@ -102,11 +102,23 @@ rm -rf logs3 && rm -f delete_me.gold
 Generate a static page to view test results in browser.
 It can be used as a standalone program or as a package.
 
-> NOTE: the static page uses primitive HTML, CSS, and JS, and does not
+The static page uses primitive HTML, CSS, and JS, and does not
 require any third-party packages. This is ad-hoc and does not adhere
 to modern best practices in website engineering (indeed, we can't use
 Node, webpack etc. here). However, it is not intended to build a
 complex website in the first place.
+
+It generates a monolithic HTML file, together with a few static asset files. An
+empty HTML template contains 60 DOM nodes, and each added test corresponds to
+another 100 DOM nodes. Expanding a test's detail view adds 90 DOM nodes (they
+can be shed away by closing the detail view). The maximum DOM depth is around
+15.
+
+> Having too many DOM nodes hurts page performance
+([see here](https://web.dev/dom-size/)). Maybe I should switch to a dynamic
+website, i.e. using a server. Splitting the HTML into smaller pieces (e.g. an
+iframe for each test) is doable, but using a server is the best way to handle
+thousands of test results.
 
 ```
 ./score_view.py -h
