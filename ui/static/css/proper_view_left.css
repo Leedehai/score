@@ -1,0 +1,167 @@
+/**
+ * Copyright (c) 2020 Leedehai. All rights reserved.
+ * Use of this source code is governed under the LICENSE.txt file.
+ */
+
+#proper_view_left {
+  display: grid;
+  grid-template-columns: [w1] auto [w2] 12px [wmax];
+  grid-template-rows: [h1] 50px [h2] auto [h3] 1.2em [h4] 150px [hmax];
+}
+
+#explorer_view_header {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  grid-row-start: h1;
+  grid-row-end: h2;
+  padding: 5px 0 2px 0;
+  background-color: var(--gray-thin);
+  border-bottom: var(--secondary-border);
+}
+
+#explorer_view_header #explorer_view_control_panel {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  font-weight: normal;
+  color: var(--fg-color);
+  margin-left: 10px;
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  width: 97%;
+  height: max-content;
+}
+
+#explorer_view_control_panel .material-icons {
+  font-size: var(--subtitle-size);
+  color: var(--fg-color-secondary);
+}
+
+#explorer_view_control_panel #entries_search_bar {
+  border: 1px solid;
+  flex-grow: 1;
+  border-radius: 3px;
+  border-color: var(--gray-bold);
+  background-color: var(--bg-color);
+  color: var(--fg-color);
+  /* height: max-content; */
+  padding: 3px;
+  font-size: var(--text-size);
+}
+
+#explorer_view_control_panel #entries_search_bar:focus {
+  border-color: var(--blue-bold);
+  outline: none;
+}
+
+#explorer_view_control_panel #entries_search_bar.search_bar_error {
+  background-color: var(--red);
+  color: var(--red-bold);
+}
+
+#explorer_view_control_panel .explorer_view_control_panel_vertial_divider {
+  width: 5px;
+  display: inline-block;
+}
+
+#explorer_view_control_panel #explorer_view_control_checkboxes {
+  display: inline-block;
+  vertical-align: middle;
+  padding-top: 3px; /* Hacky way to make it align with search bar */
+}
+
+#explorer_view_control_panel #explorer_view_control_checkboxes input {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+#explorer_view_control_panel #explorer_view_control_checkboxes #view_control_visibility_checkbox_successes,
+#explorer_view_control_panel #explorer_view_control_checkboxes #view_control_visibility_checkbox_errors {
+  cursor: pointer;
+}
+
+#explorer_view_stats {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  font-weight: normal;
+  color: var(--fg-color-secondary);
+  margin: 0 2.2em;
+  vertical-align: middle;
+}
+
+#entries_explorer_view {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  grid-row-start: h2;
+  grid-row-end: h3;
+  border-bottom: var(--primary-border);
+  padding: 1em 10px 2px 1em;
+  overflow-y: scroll;
+}
+
+#peek_view_header {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  grid-row-start: h3;
+  grid-row-end: h4;
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: var(--fg-color-secondary);
+  font-weight: normal;
+  padding-left: 1em;
+  background-color: var(--gray-thin);
+  border-bottom: var(--secondary-border);
+}
+
+#entries_peek_icons_view {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  grid-row-start: h4;
+  grid-row-end: hmax;
+  padding: 1em 10px 2px 1em;
+  overflow-x: hidden; /* prevent child's tooltip from adding a x-scrollbar */
+  overflow-y: scroll;
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  font-weight: normal;
+  color: var(--fg-color);
+}
+
+/* Tricks to style the scrollbar: http://jsfiddle.net/sLwy9ugj/ */
+#entries_explorer_view, #entries_peek_icons_view {
+  scrollbar-track-color: var(--gray);
+  scrollbar-arrow-color: var(--gray-bold);
+  /* the CSS properties below are only available in Firefox */
+  scrollbar-color: var(--gray) var(--gray-bold);
+  scrollbar-width: 12px;
+}
+#entries_explorer_view::-webkit-scrollbar,
+#entries_peek_icons_view::-webkit-scrollbar {
+  width: 12px;
+}
+#entries_explorer_view::-webkit-scrollbar-track,
+#entries_peek_icons_view::-webkit-scrollbar-track  {
+  background-color: var(--gray);
+}
+#entries_explorer_view::-webkit-scrollbar-thumb,
+#entries_peek_icons_view::-webkit-scrollbar-thumb {
+  -webkit-border-radius: 2px;
+  border-radius: 2px;
+  background: var(--gray-bold);
+}
+#entries_explorer_view::-webkit-scrollbar-thumb:hover,
+#entries_peek_icons_view::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-color-secondary);
+}
+
+.view_refreshed {
+  animation: gradual_bg_change 0.2s;
+}
+@keyframes gradual_bg_change {
+  from {
+    background-color: var(--blue);
+  }
+  to {
+    background-color: var(--bg-color);
+  }
+}

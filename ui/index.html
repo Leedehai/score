@@ -1,0 +1,157 @@
+<!-- Copyright (c) 2020 Leedehai. All rights reserved.
+     Use of this source code is governed under the LICENSE.txt file. -->
+
+<!-- "data-color-mode" was added by me to control color schemes -->
+<html data-color-mode="light">
+
+<head>
+    <meta charset="utf-8">
+    <title></title>
+    <link href="static/css/consts.css" rel="stylesheet">
+    <link href="static/css/color_mode_button.css" rel="stylesheet">
+    <link href="static/css/index.css" rel="stylesheet">
+    <link href="static/css/heading.css" rel="stylesheet">
+    <link href="static/css/proper_view_left.css" rel="stylesheet">
+    <link href="static/css/proper_view_right.css" rel="stylesheet">
+    <link href="static/css/test_entry.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <noscript>Oh.. your browser does not support JavaScript. Please enable it.</noscript>
+    <!-- This site can be viewed from localhost WITHOUT launching a server, so
+      -- we should avoid features that require one, like ES6 import. Therefore,
+      -- we just put script tags here. -->
+    <script src="static/js/feature_detect.js"></script>
+    <script src="static/js/utils.js"></script>
+    <script src="static/js/color_mode.js"></script>
+    <script src="static/js/test_entry.js"></script>
+    <script src="static/js/details_panel.js"></script>
+    <script src="static/js/persistent_states.js"></script>
+    <script src="static/js/index.js"></script>
+    <script src="model.js"></script> <!-- Where all data comes from. -->
+    <script>
+        window.addEventListener("load", () => {
+            throwOnMissingFeatures(); // Defined in feature_detect.js.
+            run(); // Defined in index.js.
+        });
+    </script>
+</head>
+
+<body>
+    <!-- SVG Elements, used by <use> tags.
+      -- Credit: https://github.com/royalfig/dark-mode-demo/blob/master/index.html
+      -- License: in static/css/color_mode_button.css. -->
+    <svg style="display: none;">
+        <symbol viewBox="0 0 24 24" id="color_mode_control_icon_sun">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </symbol>
+        <symbol viewBox="0 0 24 24" id="color_mode_control_icon_moon">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </symbol>
+    </svg>
+    <div id="master_container">
+        <div id="html_header">
+            <span id="test_title"></span>
+            <span id="color_mode_control">
+                <button class="color_mode_button hidden_in_light_mode" id="enable_light_mode">
+                    <svg>
+                        <title>Light mode</title>
+                        <use href="#color_mode_control_icon_sun"></use>
+                    </svg>
+                </button>
+                <button class="color_mode_button hidden_in_dark_mode" id="enable_dark_mode">
+                    <svg>
+                        <title>Dark mode</title>
+                        <use href="#color_mode_control_icon_moon"></use>
+                    </svg>
+                </button>
+            </span>
+        </div>
+        <div id="status_bar" class="status_bar_neutral">
+            <div id="status_bar_icon"></div>
+            <div id="status_bar_status_message"></div>
+            <div id="test_directory_breadcrumbs">
+                <!-- Array of <div>s with class 'breadcrumb_component'.. -->
+                <!-- ..then a <div> with id 'test_directory_breadcrumbs_copy_icon' -->
+            </div>
+            <span id="test_timing_message">Complete long long ago <b>in a jiffy</b></span>
+        </div>
+        <div id="sub_status_bar">
+            <div id="test_results_stats">
+                <div>Total:&nbsp;</div>
+                <div id="test_result_stats_total">0</div>
+                <div>&nbsp;Passed:&nbsp;</div>
+                <div id="test_result_stats_successes">0</div>
+                <div>&nbsp;Errors:&nbsp;</div>
+                <div id="test_result_stats_errors">0</div>
+            </div>
+            <div id="sort_options">
+                <!-- The native <select> tag is hard to style. -->
+                <div class="select_botton">Sort by:
+                    <span id="sort_by_what">test id</span>
+                </div>
+                <div class="select_options">
+                    <!-- These textContent text are used in index.js. -->
+                    <div class="select_item">test id</div>
+                    <div class="select_item">processor time</div>
+                    <div class="select_item">memory footprint</div>
+                </div>
+            </div>
+            <div id="master_log_link">
+                <!-- Hyperlink to the log file -->
+                <a href="https://en.wikipedia.org/wiki/HTTP_404" target="_blank">
+                    raw log
+                </a>
+            </div>
+        </div>
+        <div id="proper_view_left">
+            <div id="explorer_view_header">
+                <div id="explorer_view_control_panel">
+                    <i class="material-icons">search</i>
+                    <span class="explorer_view_control_panel_vertial_divider"></span>
+                    <input type="text" id="entries_search_bar" placeholder="Filter by regular expression...">
+                    <span class="explorer_view_control_panel_vertial_divider"></span>
+                    <span id="explorer_view_control_checkboxes">
+                        <label><input type="checkbox" id="view_control_visibility_checkbox_successes"
+                                checked>passed</label>
+                        <span class="explorer_view_control_panel_vertial_divider"></span>
+                        <label><input type="checkbox" id="view_control_visibility_checkbox_errors"
+                                checked>errors</label>
+                    </span>
+                </div>
+                <div id="explorer_view_stats">
+                    <!-- Found how many results, took how long. -->
+                    Found blah blah in a jiffy.
+                </div>
+            </div>
+            <div id="entries_explorer_view">
+                <!-- The test entries generated from data in model.js. -->
+            </div>
+            <div id="peek_view_header">Peek overview</div>
+            <div id="entries_peek_icons_view">
+                <!-- Status overview from data in model.js. -->
+            </div>
+        </div>
+        <div id="proper_view_right">
+            <div id="entry_details_view">
+                <!-- Details of one test, generated from data in model.js. -->
+                <div id="placeholder">
+                    <span>Click a test entry to view details.</span>
+                </div>
+            </div>
+        </div>
+        <div class="html_footer">@leedehai</div>
+    </div>
+    <div id="global_tooltip"></div>
+</body>
+
+</html>

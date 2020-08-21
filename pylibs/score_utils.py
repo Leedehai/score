@@ -9,6 +9,7 @@ import os
 import platform
 import textwrap
 import sys
+from pathlib import Path
 from typing import Optional
 
 IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty()
@@ -29,10 +30,22 @@ def get_timeout(timeout: int) -> str:
     return str(timeout if timeout != None else INFINITE_TIME)
 
 
+def maybe_start_with_home_prefix(p: Path) -> Path:
+    """
+    If the input path starts with the home directory path string, then return
+    a path that starts with the home directory and points to the same location.
+    Otherwise, return the path unchanged.
+    """
+    try:
+        return Path("~", p.relative_to(Path.home()))
+    except ValueError:
+        return p
+
+
 CTIMER_TIMEOUT_ENVKEY = "CTIMER_TIMEOUT"
 
 
-def make_command_invocation_str(timer_path: str,
+def make_command_invocation_str(timer_path: Optional[str],
                                 params: dict,
                                 indent: int = 0,
                                 working_directory: Optional[str] = None) -> str:
@@ -49,9 +62,10 @@ def make_command_invocation_str(timer_path: str,
             for k, v in params["envs"].items()
         ]
     # Timer
-    strs.append("{0}{1}={2} {3}".format(indents, CTIMER_TIMEOUT_ENVKEY,
-                                        get_timeout(params["timeout_ms"]),
-                                        timer_path))
+    if timer_path:
+        strs.append("{0}{1}={2} {3}".format(indents, CTIMER_TIMEOUT_ENVKEY,
+                                            get_timeout(params["timeout_ms"]),
+                                            timer_path))
     # Driver and arguments.
     strs += textwrap.wrap(
         text="%s %s" % (params["path"], ' '.join(params["args"])),

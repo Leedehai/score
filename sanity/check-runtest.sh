@@ -30,14 +30,14 @@ if [ $(ls logs1/*.diff.html | wc -l) -ne 0 ] ; then
     has_error=1
 fi
 
-printf "\033[32;1m./score_view.py --title \"Mock tests\" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html\n\033[0m"
-./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html ; exit_code=$?
+printf "\033[32;1m./score_ui.py --title \"Mock tests\" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html\n\033[0m"
+./score_ui.py --title "Mock tests" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html ; exit_code=$?
 if [ $exit_code -ne 0 ]; then
     printf "\033[31;1mexit code is not 0\n\033[0m"
     has_error=1
 fi
-if [ ! -f logs1/html/view_log.html ] ; then
-    printf "\033[31;1mmissing: logs1/html/view_log.html\n\033[0m"
+if [ ! -f logs1/html/index.html ] ; then
+    printf "\033[31;1mmissing: logs1/html/index.html\n\033[0m"
     has_error=1
 fi
 
@@ -65,14 +65,14 @@ if [ $(ls logs2/*.diff.html | wc -l) -ne 3 ] ; then
     has_error=1
 fi
 
-printf "\033[32;1m./score_view.py --title \"Mock tests\" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html\n\033[0m"
-./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html ; exit_code=$?
+printf "\033[32;1m./score_ui.py --title \"Mock tests\" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html\n\033[0m"
+./score_ui.py --title "Mock tests" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html ; exit_code=$?
 if [ $exit_code -ne 0 ]; then
     printf "\033[31;1mexit code is not 0\n\033[0m"
     has_error=1
 fi
-if [ ! -f logs2/html/view_log.html ] ; then
-    printf "\033[31;1mmissing: logs2/html/view_log.html\n\033[0m"
+if [ ! -f logs2/html/index.html ] ; then
+    printf "\033[31;1mmissing: logs2/html/index.html\n\033[0m"
     has_error=1
 fi
 

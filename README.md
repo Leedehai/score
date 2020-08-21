@@ -5,9 +5,10 @@
 
 Utilities to run tests.
 
-## Prerequsites:
-- Linux or macOS (Windows not tested)
-- Python3.5+, no third-party libraries needed
+## Prerequisites:
+- Linux or macOS (Windows not tested).
+- Python 3.7+, no third-party libraries needed.
+- A modern web browser (optional).
 
 ## Files
 
@@ -97,71 +98,59 @@ rm -rf logs2
 rm -rf logs3 && rm -f delete_me.gold
 ```
 
-### [score_view.py](score_view.py)
+### [score_ui.py](score_ui.py)
 
-Generate a static page to view test results in browser.
-It can be used as a standalone program or as a package.
+Generate a static page to view test results in browser. It can be used as a
+standalone program or as a package.
 
-The static page uses primitive HTML, CSS, and JS, and does not
-require any third-party packages. This is ad-hoc and does not adhere
-to modern best practices in website engineering (indeed, we can't use
-Node, webpack etc. here). However, it is not intended to build a
-complex website in the first place.
+The static page uses primitive HTML, CSS, and JS, and does not require any
+third-party packages.
 
-It generates a monolithic HTML file, together with a few static asset files. An
-empty HTML template contains 60 DOM nodes, and each added test corresponds to
-another 100 DOM nodes. Expanding a test's detail view adds 90 DOM nodes (they
-can be shed away by closing the detail view). The maximum DOM depth is around
-15.
-
-> Having too many DOM nodes hurts page performance
-([see here](https://web.dev/dom-size/)). Maybe I should switch to a dynamic
-website, i.e. using a server. Splitting the HTML into smaller pieces (e.g. an
-iframe for each test) is doable, but using a server is the best way to handle
-thousands of test results.
+[More info](ui/README.md).
 
 ```
-./score_view.py -h
-usage: score_view.py [-h] [--title TITLE] --timer PROG --log LOG
-                     [--to-dir NEW_PATH]
+./score_ui.py -h
+usage: score_ui.py [-h] [--title TITLE] --log LOG [--timer PROG] [--test-exec-path PATH]
+                   [--to-dir NEW_PATH]
 
 Static site generator for test results
 
 optional arguments:
-  -h, --help         show this help message and exit
-  --title TITLE      title of tests, default: 'Tests'
-  --timer PROG       path to the timer program used to run the tests
-  --log LOG          path to the master log, written by score_run.py
-  --to-dir NEW_PATH  directory to write results (if the directory already
-                     exits, it will be replaced), default: ./html
+  -h, --help            show this help message and exit
+  --title TITLE         title of tests, default: 'Tests'
+  --log LOG             path to the master log, written by score_run.py
+  --timer PROG          path to the timer program used to run the tests
+  --test-exec-path PATH
+                        working directory the tests ran at
+  --to-dir NEW_PATH     directory to write results (if the directory already exits, it will be
+                        replaced), default: ./html
 
 For requirements of the timer and log file: see score_run.py --docs
 ```
 
-The resulting website contains a expandable list of results, like this:
+The resulting website present a interactive view of results.
+[Full features](ui/design.md).
 
-![score_view_example_1.png](./score_view_example_1.png)
-![score_view_example_2.png](./score_view_example_2.png)
+<img src="ui/screenshots/ui-light-mode-ok.png" alt="ui-light-mode-ok.png"
+	title="ui-light-mode-ok.png" width="47%"/>
+  <img src="ui/screenshots/ui-dark-mode-ok.png" alt="ui-dark-mode-ok.png"
+	title="ui-dark-mode-ok.png" width="47%"/>
+<img src="ui/screenshots/ui-light-mode-error.png" alt="ui-light-mode-error.png"
+	title="ui-light-mode-error.png" width="47%"/>
+<img src="ui/screenshots/ui-dark-mode-error.png" alt="ui-dark-mode-error.png"
+	title="ui-dark-mode-error.png" width="47%"/>
 
-#### Examples
-```sh
-# Using score_run.py's examples above
-./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs1/log.json --to-dir logs1/html
-./score_view.py --title "Mock tests" --timer mocks/timer.py --log logs2/log.json --to-dir logs2/html
-```
+Q: Where's the test for this site?<br>A: In my back-burner :persevere:. Right
+now I rely on manual clicking. Yeah.. I know this approach is lame.
 
 #### Image resource copyright
 
-[check_logo_light.jpg](static/img/check_logo_light.jpg): from
+[check_logo_light.jpg](ui/static/img/check_logo_light.png): from
 [this website](https://www.pinterest.com/pin/368802656984876731/), license
-unknown
+unknown.
 
-### [diff_html_str.py](diff_html_str.py)
+# License
 
-Returns a valid HTML string that contains a table to render the diff view. Used
-by [score_run.py](score_run.py).
-> The HTML format is [diff.html](diff.html) - the placeholders are `%s` instead
-of `{slot_name}` because escaping `{` and `}` distorts the CSS definition
-statements.
+[MIT License](LICENSE.txt).
 
-###### EOF
+■

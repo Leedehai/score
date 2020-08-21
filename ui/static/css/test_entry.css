@@ -1,0 +1,135 @@
+/**
+ * Copyright (c) 2020 Leedehai. All rights reserved.
+ * Use of this source code is governed under the LICENSE.txt file.
+ */
+
+.test_entry_button {
+  position: relative;
+  display: block;
+  border: 1px solid var(--gray-more);
+  border-left-width: 5px;
+  margin: 1px 0;
+  max-width: 100%; /* so increasing border-left-width won't change width */
+  cursor: pointer;
+  text-align: left;
+  outline: none;
+  height: max-content;
+  padding: 2px 2px;
+}
+
+.test_entry_button:not([te-visible]) {
+  display:none;
+}
+
+.test_entry_button:hover {
+  background-color: var(--gray-thin);
+  border-left-width: 7px; /* the left border becomes thicker... */
+  padding-left: 0; /* ...and the left padding becomes thinner. */
+}
+
+.test_entry_button[te-status='1'] {
+  border-left-color: var(--green-bold);
+}
+.test_entry_button[te-status='0'] {
+  border-left-color: var(--red-bold);
+}
+
+.test_entry_button[te-user-selected] {
+  box-shadow: 0 0 10px 10px var(--blue);
+  z-index: 1;
+}
+
+.test_entry_button .test_entry_status_icon {
+  margin: 0 0.5em;
+  vertical-align: middle;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.test_entry_button .material-icons {
+  font-size: var(--text-big-size);
+}
+
+.test_entry_button[te-status='1'] .test_entry_status_icon .material-icons {
+  color: var(--green-bold);
+}
+.test_entry_button[te-status='0'] .test_entry_status_icon .material-icons {
+  color: var(--red-bold);
+}
+
+.test_entry_button .test_entry_star_icon {
+  color: var(--gray-more);
+  user-select: none;
+}
+
+.test_entry_button[te-user-starred] .test_entry_star_icon {
+  color: var(--yellow-bold);
+}
+
+.test_entry_button .test_entry_star_icon:hover {
+  background-color: var(--yellow);
+}
+
+.test_entry_id_text {
+  font-family: var(--text-font);
+  font-size: var(--text-big-size);
+  color: var(--fg-color);
+  display: inline-block;
+  vertical-align: middle;
+  width: 90%;
+  /* properties below ensure the text, if too long, overflow with ellipsis. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.test_entry_star_holder {
+  position: absolute;
+  right: 2px;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.test_entry_star_holder:hover, .test_entry_star_holder:focus {
+  background-color: var(--gray);
+  border-radius: 2px;
+}
+
+.peek_icon {
+  font-size: var(--text-big-size);
+  opacity: 0.5;
+  cursor: pointer;
+  display: inline;
+}
+
+.peek_icon[data-slt] .material-icons {
+  outline: 2px solid var(--blue-bold);
+}
+
+.peek_icon[data-vis][data-ivw] {
+  opacity: 1.0;
+}
+
+.peek_icon:not([data-vis]) {
+  cursor: default;
+}
+
+.peek_icon[data-vis]:hover .material-icons {
+  outline: 2px solid var(--yellow-bold);
+}
+
+.peek_icon .material-icons {
+  font-size: var(--text-size);
+  font-weight: bold;
+  margin: 1px;
+}
+
+.peek_icon .material-icons.peek_icon_success {
+  background-color: var(--green);
+  color: var(--green-bold);
+}
+
+.peek_icon .material-icons.peek_icon_error {
+  background-color: var(--red);
+  color: var(--red-bold);
+}

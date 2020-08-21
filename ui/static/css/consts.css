@@ -1,0 +1,64 @@
+/**
+ * Copyright (c) 2020 Leedehai. All rights reserved.
+ * Use of this source code is governed under the LICENSE.txt file.
+ * -----
+ * CSS custom properties to be shared by other CSS definitions.
+ */
+
+:root[data-color-mode="light"] {
+  /* Color scheme: do not alter; there were set for good reasons. */
+  --bg-color: #fafafa;
+  --fg-color: #000;
+  --fg-color-secondary: #515560;
+  --red: #f9e9e7;
+  --red-bold: #c84031;
+  --green: #e9f4eb;
+  --green-bold: #3c7d40;
+  --blue: #c7d4ec;
+  --blue-bold: #1a73e8;
+  --yellow: #faf4df;
+  --yellow-bold: #eeac3c;
+  --gray-thin: #f7f7f8;
+  --gray: #f1f3f4;
+  --gray-more: #c0c1c2;
+  --gray-bold: #909397;
+}
+
+:root[data-color-mode="dark"] {
+  /* Color scheme: do not alter; there were set for good reasons. */
+  --bg-color: #202124;
+  --fg-color: #e8eaed;
+  --fg-color-secondary: #9da1a6;
+  --red: #554141;
+  --red-bold: #e49086;
+  --green: #414f46;
+  --green-bold: #91c699;
+  --blue: #414a5b;
+  --blue-bold: #92b5f2;
+  --yellow: #59533d;
+  --yellow-bold: #f7d575;
+  --gray-thin: #28292c;
+  --gray: #2f3134;
+  --gray-more: #303030;
+  --gray-bold: #3d4043;
+}
+
+:root {
+  --title-font: 'Open Sans', 'Helvetica', sans-serif;
+  --subtitle-font: 'Open Sans', 'Helvetica', sans-serif;
+  --text-big-font: 'Open Sans', 'Helvetica', sans-serif;
+  --text-font: 'Open Sans', 'Helvetica', sans-serif;
+  --code-font: 'Source Sans Pro', monospace;
+
+  --title-size: 22px;
+  --subtitle-size: 18px;
+  --text-big-size: 16px;
+  --text-size: 14px;
+  --code-size: 14px;
+}
+
+:root {
+  --proper-view-grid-color: var(--gray-more);
+  --primary-border: solid 2px var(--proper-view-grid-color);
+  --secondary-border: solid 1px var(--proper-view-grid-color);
+}

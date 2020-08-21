@@ -1,0 +1,212 @@
+/**
+ * Copyright (c) 2020 Leedehai. All rights reserved.
+ * Use of this source code is governed under the LICENSE.txt file.
+ */
+
+#html_header {
+  font-family: var(--title-font);
+  padding: 5px;
+}
+
+#html_header #test_title {
+  font-family: var(--title-font);
+  font-size: var(--title-size);
+  font-weight: 600;
+  color: var(--fg-color-secondary);
+  margin: 6px 4px;
+  padding: 6px 8px;
+}
+
+#html_header #color_mode_control {
+  position: absolute;
+  right: 5px;
+}
+
+#status_bar {
+  padding: 6px 2px 5px 2px;
+  border-bottom-style: solid;
+  border-bottom-width: 3px;
+  font-family: var(--subtitle-font);
+  position: relative;
+  color: var(--fg-color);
+  cursor: default;
+  /* NOTE Do not set these properties here, as they depend on test status:
+   * background-color,
+   * border-bottom-color,
+   */
+}
+
+.status_bar_neutral {
+  background-color: var(--gray-thin);
+  border-bottom-color: var(--gray-bold);
+}
+
+.status_bar_ok {
+  color: var(--green-bold);
+  background-color: var(--green);
+  border-bottom-color: var(--green-bold);
+}
+
+.status_bar_error {
+  color: var(--red-bold);
+  background-color: var(--red);
+  border-bottom-color: var(--red-bold);
+}
+
+#status_bar #status_bar_icon {
+  display: inline-block;
+  vertical-align: middle;
+  padding-left: 12px;
+}
+
+#status_bar #status_bar_icon .material-icons {
+  font-size: var(--title-size);
+}
+
+#status_bar #status_bar_status_message {
+  font-family: var(--text-big-font);
+  font-size: var(--text-big-size);
+  font-weight: bold;
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 6px;
+}
+
+#status_bar #test_directory_breadcrumbs {
+  font-family: var(--text-big-font);
+  font-size: var(--text-big-size);
+  font-weight: normal;
+  display: inline-block;
+  vertical-align: middle;
+  padding-left: 6px;
+  max-width: 60%;
+  overflow: hidden;
+}
+
+#status_bar #test_directory_breadcrumbs .breadcrumb_component {
+  padding: 0 2px;
+  display: inline-block;
+  cursor: text;
+}
+
+#status_bar #test_directory_breadcrumbs_copy_icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 6px;
+}
+
+#status_bar #test_directory_breadcrumbs_copy_icon .material-icons {
+  font-size: var(--text-big-size);
+  color: var(--bold-gray);
+}
+
+.copy_button:hover {
+  background-color: var(--gray);
+  cursor: pointer;
+}
+
+.button_just_clicked {
+  color: var(--blue);
+  background-color: var(--gray-bold);
+  border-radius: 3px;
+}
+
+#status_bar #test_timing_message {
+  padding-top: 3px;
+  position: absolute;
+  right: 5px;
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  margin: 0 6px;
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 30%;
+  overflow: hidden;
+  cursor: text;
+}
+
+#sub_status_bar {
+  padding-top: 2px; /* Hack to have text at middle */
+  background-color: var(--gray-thin);
+  position: relative;
+}
+
+#sub_status_bar #test_results_stats {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  font-weight: normal;
+  color: var(--fg-color);
+  padding-left: 12px;
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 50%;
+}
+
+#sub_status_bar #test_results_stats div {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* The container <div> - needed to position the dropdown content */
+#sub_status_bar #sort_options {
+  margin-left: 20px;
+  vertical-align: middle;
+  position: relative;
+  display: inline-block;
+  border: none;
+  cursor: default;
+}
+
+#sub_status_bar #sort_options .select_botton {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  font-weight: normal;
+  background-color: var(--gray-thin);
+  color: var(--fg-color);
+  border: none;
+  padding: 0 5px;
+}
+
+/* Dropdown Content (Hidden by Default) */
+#sub_status_bar #sort_options .select_options {
+  display: none;
+  position: absolute;
+  width: max-content;
+  background-color: var(--gray-thin);
+  border: 1px solid var(--gray-bold);
+  z-index: 2; /* higher than .test_entry_button[te-user-selected] z-index */
+  width: max-content;
+}
+/* Items inside the dropdown */
+#sub_status_bar #sort_options .select_options > div.select_item {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: var(--fg-color);
+  font-weight: normal;
+  text-decoration: none;
+  padding: 5px;
+}
+#sub_status_bar #sort_options:hover .select_botton,
+#sub_status_bar #sort_options .select_options > div.select_item:hover {
+  background-color: var(--blue);
+}
+/* Show the dropdown menu on hover */
+#sub_status_bar #sort_options:hover .select_options {
+  display: block;
+}
+/* Change the background color of the dropdown button when the dropdown content is shown */
+#sub_status_bar #sort_options:hover .select_botton {
+  background-color: var(--blue);
+}
+
+#sub_status_bar #master_log_link {
+  position: absolute;
+  right: 8px;
+  display: inline-block;
+}
+
+#sub_status_bar #master_log_link a {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: var(--blue-bold);
+}

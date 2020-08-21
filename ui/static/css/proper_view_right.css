@@ -1,0 +1,224 @@
+/**
+ * Copyright (c) 2020 Leedehai. All rights reserved.
+ * Use of this source code is governed under the LICENSE.txt file.
+ */
+
+#entry_details_view {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  position: relative;
+}
+
+#entry_details_view > #placeholder {
+  font-family: var(--title-font);
+  font-size: var(--title-size);
+  font-weight: 600;
+  color: var(--gray-more);
+  width: 100%;
+  position: absolute;
+  top: 35vh;
+  text-align: center;
+}
+
+#entry_details_view > #placeholder.hidden {
+  display: none;
+}
+
+#entry_details_view > #placeholder > span:hover {
+  color: var(--gray-bold);
+}
+
+#entry_details_view > #placeholder > span:hover::before {
+  content: "⇠ ";
+  position: absolute;
+  left: 1em;
+}
+
+#entry_details_view .test_details_panel {
+  margin: 10px;
+  background: var(--bg-color);
+  display: grid;
+  grid-template-columns: [w1] auto [w2] 12px [wmax];
+  /* grid-template-rows: [h1] 150px [h2] 200px [h3]; */
+  background-color: var(--bg-color);
+}
+
+.test_details_panel .test_details_title {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  font-family: var(--subtitle-font);
+  font-size: var(--subtitle-size);
+  color: var(--fg-color);
+  padding: 12px;
+  word-break: break-all;
+}
+
+.test_details_panel .test_details_title #test_details_id_holder {
+  font-size: var(--subtitle-size);
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 6px;
+}
+
+.test_details_panel .test_details_title #test_id_copy_icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 6px;
+}
+
+.test_details_panel .test_details_title #test_id_copy_icon .material-icons {
+  color: var(--fg-color-secondary);
+  font-size: var(--subtitle-size);
+}
+
+.test_details_panel .test_details_command {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  padding: 12px;
+}
+
+.test_details_panel .test_details_command #expansion_button {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: var(--fg-color);
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 12px;
+}
+
+.test_details_panel .test_details_command #copy_command {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 6px;
+}
+
+.test_details_panel .test_details_command #copy_command .material-icons {
+  color: var(--fg-color-secondary);
+  font-size: var(--text-size);
+}
+
+.test_details_panel .test_details_command pre#command_text_area {
+  font-family: var(--code-font);
+  font-size: var(--text-size);
+  color: var(--fg-color);
+  padding: 0 12px;
+  display: none;
+}
+
+.test_details_panel .test_details_command.expanded #expansion_button {
+  background-color: var(--blue);
+}
+
+.test_details_panel .test_details_command.expanded pre#command_text_area {
+  display: block;
+}
+
+.test_details_panel .test_details_overview {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  padding: 12px;
+}
+
+.test_details_panel .test_details_overview #test_details_status_icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin: 0 0.5em;
+}
+
+.test_details_panel[test-details-status='1'] .test_details_overview
+#test_details_status_icon .material-icons {
+  color: var(--green-bold);
+  font-size: var(--text-size);
+}
+
+.test_details_panel[test-details-status='0'] .test_details_overview
+#test_details_status_icon .material-icons{
+  color: var(--red-bold);
+  font-size: var(--text-size);
+}
+
+.test_details_panel .test_details_overview table {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: var(--fg-color);
+  padding: 12px;
+  margin-right: 5em;
+  float: left; /* Make tables side-by-side */
+}
+
+.test_details_panel .test_details_overview table tr {
+  padding-left: 1px;
+}
+
+.test_details_panel .test_details_overview table tr td {
+  width: 10em;
+}
+
+.test_details_panel .test_details_overview table tr td .success,
+.test_details_panel .test_details_tasks    table tr td .success {
+  color: var(--green-bold);
+}
+
+.test_details_panel .test_details_overview table tr td .error,
+.test_details_panel .test_details_tasks    table tr td .error {
+  color: var(--red-bold);
+}
+
+.test_details_panel .test_details_overview table a,
+.test_details_panel .test_details_tasks    table a {
+  color: var(--blue-bold);
+  text-decoration: underline;
+}
+
+.test_details_panel .test_details_tasks {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  padding: 12px;
+}
+
+.test_details_panel .test_details_tasks table {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: var(--fg-color);
+  border-collapse: collapse;
+}
+
+.test_details_panel .test_details_tasks table tr th:nth-child(1),
+.test_details_panel .test_details_tasks table tr td:nth-child(1) {
+  width: 2em;
+  text-align: center;
+}
+
+.test_details_panel .test_details_tasks table tr th,
+.test_details_panel .test_details_tasks table tr td {
+  width: 10em;
+  text-align: center;
+}
+
+.test_details_panel .test_details_tasks table tr:hover td {
+  background-color: var(--gray);
+}
+
+/* Tricks to style the scrollbar: http://jsfiddle.net/sLwy9ugj/ */
+#entry_details_view {
+  scrollbar-track-color: var(--gray);
+  scrollbar-arrow-color: var(--gray-bold);
+  /* the CSS properties below are only available in Firefox */
+  scrollbar-color: var(--gray) var(--gray-bold);
+  scrollbar-width: 12px;
+}
+#entry_details_view::-webkit-scrollbar {
+  width: 12px;
+}
+#entry_details_view::-webkit-scrollbar-track {
+  background-color: var(--gray);
+}
+#entry_details_view::-webkit-scrollbar-thumb {
+  -webkit-border-radius: 2px;
+  border-radius: 2px;
+  background: var(--gray-bold);
+}
+#entry_details_view::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-color-secondary);
+}

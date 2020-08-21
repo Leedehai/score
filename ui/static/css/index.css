@@ -1,0 +1,153 @@
+/**
+ * Copyright (c) 2020 Leedehai. All rights reserved.
+ * Use of this source code is governed under the LICENSE.txt file.
+ */
+
+body {
+  margin: 0; /* Remove the default margin */
+  overflow-x: hidden; /* No horizontally scrolling beyond screen edges */
+  background-color: var(--bg-color);
+}
+
+#master_container {
+  margin: 0;
+  border-width: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: [w1] minmax(450px, 36%) [w2] 64% [wmax];
+  grid-template-rows: [h1] 52px [h2] 38px [h3] 24px [h4]
+    calc(100vh - 120px) [hmax]; /* 100vh: 100% viewport height */
+}
+
+:root[data-color-mode="light"] .hidden_in_light_mode {
+  display: none;
+}
+
+:root[data-color-mode="dark"] .hidden_in_dark_mode {
+  display: none;
+}
+
+#html_header {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  grid-row-start: h1;
+  grid-row-end: h2;
+}
+
+#status_bar {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  grid-row-start: h2;
+  grid-row-end: h3;
+}
+
+#sub_status_bar {
+  grid-column-start: w1;
+  grid-column-end: wmax;
+  grid-row-start: h3;
+  grid-row-end: h4;
+  border-bottom: var(--primary-border);
+}
+
+#proper_view_left {
+  grid-column-start: w1;
+  grid-column-end: w2;
+  grid-row-start: h4;
+  grid-row-end: hmax;
+  position: relative;
+  border-right: var(--primary-border);
+  border-bottom: var(--primary-border);
+}
+
+#proper_view_right {
+  grid-column-start: w2;
+  grid-column-end: wmax;
+  grid-row-start: h4;
+  grid-row-end: hmax;
+  border-bottom: var(--primary-border);
+}
+
+.html_footer {
+  font-family: var(--text-font);
+  font-size: 10px;
+  color: var(--fg-color);
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  margin: 2px;
+}
+
+/* Custom tooltip. We want this because the native tooltip installed by
+ * the HTML "title" attribute can't be styled by CSS. I was surprised it
+ * browser vendors didn't support styling the native tooltip (maybe they
+ * want to discourage using tooltip because of its a10y issues?) */
+.tooltip_owner {
+  position: relative;
+}
+.tooltip_owner:hover .tooltip_text {
+  visibility: visible;
+  opacity: 1;
+}
+.tooltip_owner .tooltip_text {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s 0.2s; /* name duration delay */
+  background-color: var(--fg-color-secondary);
+  color: var(--bg-color); /* Background color as text color */
+  text-align: left;
+  font-family: var(--code-font);
+  font-weight: normal; /* override other weights */
+  border-radius: 2px;
+  padding: 2px 10px;
+  position: absolute;
+  z-index: 1;
+  width: max-content;
+  /* max-width + left <= 100% so the tooltip's right edge doesn't
+   * expand out of the right edge of the tooltip owner. This way,
+   * if you want to ensure the tooltip isn't clipped by the right
+   * border of the owner's parent, you just need to ensure the
+   * owner itself isn't clipped by the right border of its parent. */
+  max-width: 80%;
+  left: 20%;
+  top: 100%; /* appear at bottom */
+}
+
+/* Custom tooltip, take 2. This element is created as a direct child of
+ * <body>, so it won't be clipped by border of any other elements. You
+ * need to use JavaScript to set its position to make it appear to
+ * belong to the element under your mouse. */
+body > #global_tooltip {
+  visibility: hidden;
+  background-color: var(--fg-color-secondary);
+  color: var(--bg-color); /* page background color as text color */
+  text-align: left;
+  font-family: var(--code-font);
+  font-weight: normal; /* override other weights */
+  border-radius: 2px;
+  padding: 2px 10px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 999; /* appear above (almost) all elements */
+  max-width: 40em;
+  word-break: break-all;
+}
+
+.disabled_cases {
+  margin-left: 12px;
+}
+
+.disabled_cases .disabled_cases_message {
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: #777777;
+  text-decoration: underline;
+}
+
+.disabled_cases .disabled_case_html {
+  font-family: Helvetica, sans-serif;
+  font-size: var(--text-size);
+  color: #777777;
+  text-decoration: initial;
+  margin-left: 12px;
+}
