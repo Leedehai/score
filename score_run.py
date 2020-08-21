@@ -733,10 +733,8 @@ def main():
             }
             metadata_list_processed.append(metadata_copy)
 
-    if not args.write_golden:
-        # if args.seed == None, use a system-provided randomness source
-        random.seed(args.seed)
-        random.shuffle(metadata_list_processed)
+    if args.seed != None:
+        print(info_s("'--seed' is deprecated."))
 
     return run_all(args, metadata_list_processed, unique_count)
 
