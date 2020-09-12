@@ -21,7 +21,6 @@ import multiprocessing
 import multiprocessing.dummy as mp  # threading wrapped using multiprocessing API
 import os
 import platform
-import random
 import re
 import shutil
 import signal
@@ -36,7 +35,7 @@ from pylibs.rotating_logger import (
     LogMessage,
 )
 from pylibs.docs import EXPLANATION_STRING
-from pylibs.diff_html_str import get_diff_html_str
+from pylibs.differ import get_diff_html_str
 from pylibs.flakiness import parse_flakiness_decls
 from pylibs.result_dict import generate_result_dict
 from pylibs.score_utils import info_s, error_s
@@ -338,11 +337,7 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
             assert stdout_filename
             found_golden, stdout_comparison_diff = get_diff_html_str(
                 html_title=filepath_stem.split(os.sep)[-1],
-                platform_info=PLATFORM_INFO,
                 desc=metadata["desc"],
-                driver=metadata["path"],
-                command_invocation=score_utils.make_command_invocation_str(
-                    timer, metadata, indent=2),
                 expected_filename=golden_filename,
                 actual_filename=stdout_filename,
             )

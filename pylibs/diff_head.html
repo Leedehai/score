@@ -1,0 +1,125 @@
+<!-- To be inserted into the diff view HTML template -->
+
+<style>
+    .head {
+        font-family: monospace;
+        font-size: 20px;
+    }
+
+    .info_div {
+        margin-top: 0.5em;
+        margin-bottom: 0.5em;
+    }
+
+    .info_key {
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: bold;
+    }
+
+    .info_value {
+        font-family: monospace;
+        font-size: 12px;
+    }
+
+    a {
+        color: #0000ee;
+    }
+
+    :root {
+        --border: 1px solid #7c7a7b;
+        --red: #ffeef0b7;
+        --red-bold: #fdb8c0b7;
+        --green: #e6ffedb7;
+        --green-bold: #acf2bdb7;
+        --blue: powderblue;
+    }
+
+    table.diff {
+        font-family: monospace;
+        font-size: 12px;
+        border: var(--border);
+        border-collapse: collapse;
+    }
+
+    span.diff_add,
+    span.diff_chg,
+    span.diff_sub {
+        border-radius: 0.2em
+    }
+
+    .from_line {
+        background-color: var(--red);
+    }
+
+    tr,
+    td {
+        padding: 0;
+        margin: 0;
+    }
+
+    [id^="from"]+td>span.diff_chg {
+        background-color: var(--red-bold);
+        height: 100%;
+    }
+
+    [id^="from"]+td>span.diff_sub {
+        background-color: var(--red-bold);
+        height: 100%;
+    }
+
+    .to_line {
+        background-color: var(--green);
+    }
+
+    [id^="to"]+td>span.diff_add {
+        background-color: var(--green-bold);
+        height: 100%;
+    }
+
+    [id^="to"]+td>span.diff_chg {
+        background-color: var(--green-bold);
+        height: 100%;
+    }
+
+    thead {
+        border-bottom: var(--border);
+    }
+
+    td.diff_next {
+        background-color: var(--blue);
+        vertical-align: text-top;
+        user-select: none;
+    }
+
+    td.diff_header {
+        text-align: right;
+        padding-right: 0.2ch;
+        background-color: var(--blue);
+        vertical-align: text-top;
+        user-select: none;
+    }
+
+    tr td.data {
+        min-width: 100ch;
+        max-width: 100ch;
+        word-break: break-all;
+    }
+</style>
+<script>
+    window.addEventListener('load', () => {
+        const spans_add = Array.from(document.getElementsByClassName("diff_add"));
+        const spans_chg = Array.from(document.getElementsByClassName("diff_chg"));
+        const spans_sub = Array.from(document.getElementsByClassName("diff_sub"));
+        for (let span_node of spans_add.concat(spans_chg).concat(spans_sub)) {
+            const parent = span_node.parentElement;        // td
+            const parentPrevious = parent.previousSibling; // td
+            if (parentPrevious.id.startsWith("from")) {
+                parent.classList.add("from_line");
+            }
+            if (parentPrevious.id.startsWith("to")) {
+                parent.classList.add("to_line");
+            }
+        }
+    });
+</script>

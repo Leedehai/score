@@ -158,16 +158,17 @@ def _build_aggregate_info(inputs: BuildAggregateInfoParam):
     timer_path, test_exec_path, start_index, end_index, task_dicts = inputs
     # Test repeated k times <=> len(task_indexes) == k.
     task_indexes = list(range(start_index, end_index))  # [start, end)
+    one_task = task_dicts[-1]  # Really, any valid index is acceptable, e.g. 0.
     command_invocation = score_utils.make_command_invocation_str(
         timer_path,
-        task_dicts[0],
+        one_task,
         indent=2,
         working_directory=str(test_exec_path),
     )
     task_error_count = sum(1 for e in task_dicts
                            if TaskResGetter.ok(e) == False)
     has_single_data_point = len(task_dicts) < 2
-    timeout = TaskResGetter.timeout(task_dicts[0])
+    timeout = TaskResGetter.timeout(one_task)
     runtime_average = statistics.mean(
         TaskResGetter.proc_time(e) for e in task_dicts)
     runtime_stddev = 0 if has_single_data_point else statistics.stdev(
@@ -176,8 +177,8 @@ def _build_aggregate_info(inputs: BuildAggregateInfoParam):
         TaskResGetter.maxrss(e) for e in task_dicts)
     maxrss_stddev = 0 if has_single_data_point else statistics.stdev(
         TaskResGetter.maxrss(e) for e in task_dicts)
-    expected_exit = TaskResGetter.exit(task_dicts[0])["expected"]
-    golden_file = TaskResGetter.golden_file(task_dicts[0])
+    expected_exit = TaskResGetter.exit(one_task)["expected"]
+    golden_file = TaskResGetter.golden_file(one_task)
     return TestAggregateInfo(
         task_indexes=task_indexes,
         command=command_invocation,

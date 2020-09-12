@@ -139,6 +139,10 @@ The resulting website present a interactive view of results.
 	title="ui-light-mode-error.png" width="47%"/>
 <img src="ui/screenshots/ui-dark-mode-error.png" alt="ui-dark-mode-error.png"
 	title="ui-dark-mode-error.png" width="47%"/>
+<img src="ui/screenshots/ui-light-mode-error-diff.png" alt="ui-light-mode-error-diff.png"
+	title="ui-light-mode-error.png" width="47%"/>
+<img src="ui/screenshots/ui-dark-mode-error-diff.png" alt="ui-dark-mode-error-diff.png"
+	title="ui-dark-mode-error.png" width="47%"/>
 
 Q: Where's the test for this site?<br>A: In my back-burner :persevere:. Right
 now I rely on manual clicking. Yeah.. I know this approach is lame.
