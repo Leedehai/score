@@ -18,6 +18,6 @@ Internet access to [Google Fonts](https://fonts.googleapis.com) is optional but
 highly recommended. If the browser couldn't load the fonts and icons, the UI
 might be weird (some bits are missing), but the site is still operational.
 
-Development was done in the Chrome browser, and tested with Firefox and Safari.
+Development was done in the Chrome browser, and tested with Firefox.
 
 ■

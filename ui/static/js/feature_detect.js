@@ -15,11 +15,15 @@ function throwOnMissingFeatures() {
   };
   const BROWSER_ERRS = {
     // Though checking the user agent string is considered a bad
-    // practice, let me make an exception for Internet Explorer.
+    // practice, let me make an exception for some browsers.
     'internet_explorer':
         '<h1 style="font-size: 24px; font-weight: bold;">Oh.. ' +
         'your browser is Internet Explorer. Too many features ' +
         'required by the modern Web Standard are missing.</h1>',
+    'safari_is_mysteriously_lame':
+        '<h1 style="font-size: 24px; font-weight: bold;">Oh.. ' +
+        'your browser is Safari. I thought its support for the modern Web ' +
+        'Standard was ok but it has troubles with the test entry list.</h1>',
     // Feature detection errors.
     'js-object-entries': makeMessageDom('JavaScript Object.entries()'),
     'css-custom-properties': makeMessageDom('CSS custom properties'),
@@ -31,6 +35,10 @@ function throwOnMissingFeatures() {
   const browserFeatureErrs = [];
   if (navigator.userAgent.includes('MSIE')) {
     browserFeatureErrs.push(BROWSER_ERRS['internet_explorer']);
+  }
+  if (navigator.userAgent.includes('Safari') &&
+      !navigator.userAgent.includes('Chrome')) {
+    browserFeatureErrs.push(BROWSER_ERRS['safari_is_mysteriously_lame']);
   }
   if (Object.entries === undefined) {
     browserFeatureErrs.push(BROWSER_ERRS['js-object-entries']);
