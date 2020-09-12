@@ -10,6 +10,10 @@
   position: relative;
 }
 
+#entry_details_view.iframe_opened {
+  height: 33%;
+}
+
 #entry_details_view > #placeholder {
   font-family: var(--title-font);
   font-size: var(--title-size);
@@ -42,10 +46,6 @@
   grid-template-columns: [w1] auto [w2] 12px [wmax];
   /* grid-template-rows: [h1] 150px [h2] 200px [h3]; */
   background-color: var(--bg-color);
-}
-
-.test_details_panel a.link_as_non_iframe_button.link_as_button_clicked {
-  background-color: var(--blue);
 }
 
 .test_details_panel .test_details_title {
@@ -169,12 +169,6 @@
   color: var(--red-bold);
 }
 
-.test_details_panel .test_details_overview table a,
-.test_details_panel .test_details_tasks    table a {
-  color: var(--blue-bold);
-  text-decoration: underline;
-}
-
 .test_details_panel .test_details_tasks {
   grid-column-start: w1;
   grid-column-end: wmax;
@@ -204,6 +198,17 @@
   background-color: var(--gray);
 }
 
+.test_details_panel table td span.iframe_opener {
+  color: var(--blue-bold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.test_details_panel table td span.iframe_opener.iframe_opened {
+  box-shadow: 0 0 10px 10px var(--blue-bold);
+  z-index: 1;
+}
+
 /* Tricks to style the scrollbar: http://jsfiddle.net/sLwy9ugj/ */
 #entry_details_view {
   scrollbar-track-color: var(--gray);
@@ -225,4 +230,42 @@
 }
 #entry_details_view::-webkit-scrollbar-thumb:hover {
   background: var(--fg-color-secondary);
+}
+
+#iframe_view {
+  display: none;
+}
+
+#iframe_view.iframe_opened {
+  display: block;
+  border-top: var(--primary-border);
+  height: 66%;
+  /* A color that works well in either color mode. Note that we want this
+   * light-ish color, because CSS here can't control the iframe content. */
+  background-color: #dcdddc;
+}
+
+#iframe_view #iframe_desc {
+  height: 1.5em;
+  width: 100%;
+  font-family: var(--text-font);
+  font-size: var(--text-size);
+  color: var(--fg-color-secondary);
+  font-weight: normal;
+  padding-left: 1em;
+  background-color: var(--gray-thin);
+  border-bottom: var(--secondary-border);
+}
+
+#iframe_view #iframe_desc .material-icons {
+  font-size: var(--text-size);
+  color: var(--fg-color-secondary);
+  cursor: pointer;
+}
+
+#iframe_view iframe#raw_file_presenter {
+  border: none;
+  width: 100%;
+  height: 95%;
+  /* Unable to change most CSS inside the iframe, such as the text color */
 }

@@ -30,6 +30,8 @@ class DetailsPanel extends HTMLElement {
   disconnectedCallback() {
     const placeholder = utils.querySelector('#entry_details_view #placeholder');
     placeholder.classList.remove('hidden');
+    const iframeView = utils.querySelector('#iframe_view');
+    iframeView.classList.remove('iframe_opened');
   }
 
   /* Custom methods below. */
@@ -128,9 +130,8 @@ class DetailsPanel extends HTMLElement {
         tooltip: 'if present, compare the actual stdout with its content',
       },
       {
-        content: this.testInfo.goldenFile ?
-            this.makeAnchorHtml_('golden file', this.testInfo.goldenFile) :
-            '-',
+        content: this.testInfo.goldenFile ? 'golden file' : '-',
+        iframe: this.testInfo.goldenFile,
       },
     ]);
     metadataTable.addRow([
@@ -236,14 +237,12 @@ class DetailsPanel extends HTMLElement {
           class: taskInfo.exit[0] ? 'success' : 'error',
         },
         {
-          content: taskInfo.stdout[1] ?
-              this.makeAnchorHtml_('stdout', taskInfo.stdout[1]) :
-              '-',
+          content: taskInfo.stdout[1] ? 'stdout' : '-',
+          iframe: taskInfo.stdout[1],
         },
         {
-          content: taskInfo.stdout[2] ?
-              this.makeAnchorHtml_('diff', taskInfo.stdout[2]) :
-              '-',
+          content: taskInfo.stdout[2] ? 'diff' : '-',
+          iframe: taskInfo.stdout[2],
         },
         {
           content: taskInfo.stdout[0] ? 'yes' : 'no',
@@ -263,20 +262,6 @@ class DetailsPanel extends HTMLElement {
 
     this.append(section);
   }
-
-  /**
-   * @param {string} text
-   * @param {string} uri
-   * @param {boolean=} asIframe
-   * @return {string}
-   */
-  makeAnchorHtml_(text, uri, asIframe) {
-    if (asIframe) {
-      return '';
-    }
-    return `<a href=${uri} target="_blank">${text}</a>`;
-  }
-
 
   /**
    * @return {HTMLElement}
@@ -336,6 +321,7 @@ window.customElements.define('details-panel', DetailsPanel);
  * @property {string=} tooltip
  * @property {string|!Array<string>=} class
  * @property {string=} id
+ * @property {string=} iframe If defined, this behaves as an iframe opener
  */
 
 class TableMaker {
@@ -396,6 +382,9 @@ class TableMaker {
         if (cellData.id) {
           e.id = cellData.id;
         }
+        if (cellData.iframe) {
+          configureIframeViewAnchor(span, cellData.iframe);
+        }
         e.append(span);
         row.append(e);
       });
@@ -411,4 +400,69 @@ class TableMaker {
     this.done_ = true;
     return this.table_;
   }
+}
+
+/**
+ * @param {!Event} event
+ */
+function openFileInIframe(event) {
+  console.log(event.target);
+}
+
+/**
+ * @param {HTMLSpanElement} span
+ * @param {string} iframeSrc
+ */
+function configureIframeViewAnchor(span, iframeSrc) {
+  span.classList.add('iframe_opener');
+  const detailsView = utils.querySelector('#entry_details_view');
+  const iframeView = utils.querySelector('#iframe_view');
+  const iframeDescText =
+      utils.querySelector('#iframe_desc #desc_text', iframeView);
+  const iframeOpenLink =
+      utils.querySelector('#iframe_desc a#open_link', iframeView);
+  const iframeInsertionPoint =
+      utils.querySelector('#iframe_insertion_point', iframeView);
+  const closeIframeView = () => {
+    span.classList.remove('iframe_opened');
+    detailsView.classList.remove('iframe_opened');
+    iframeView.classList.remove('iframe_opened');
+    iframeInsertionPoint.innerHTML = '';
+  };
+  span.addEventListener('click', () => {
+    const now_opened = span.classList.toggle('iframe_opened');
+    // Don't use utils.querySelectorAll() here, because the resultant
+    // array might be empty.
+    detailsView.querySelectorAll('span.iframe_opened').forEach((e) => {
+      if (e !== span) {
+        e.classList.remove('iframe_opened');
+      }
+    });
+    if (now_opened) {
+      detailsView.classList.add('iframe_opened');
+      iframeView.classList.add('iframe_opened');
+      iframeDescText.textContent = utils.capWidthByMiddleEllipsis(
+          iframeSrc, iframeDescText.scrollWidth / 9);
+      iframeOpenLink.setAttribute('href', iframeSrc);
+      const copyButton = utils.makeCopyButton(iframeSrc, 'span', 'copy_link');
+      // Don't use utils.querySelector() here, because the resultant
+      // element might be null.
+      const previousCopyButton =
+          iframeDescText.parentElement.querySelector('#copy_link');
+      if (previousCopyButton) {
+        previousCopyButton.remove();  // Clear the previous button.
+      }
+      iframeDescText.parentElement.insertBefore(copyButton, iframeOpenLink);
+      utils.querySelector('#close_iframe', iframeView)
+          .addEventListener('click', closeIframeView);
+      const iframe = document.createElement('iframe');
+      iframe.name = 'raw_file_presenter';
+      iframe.id = 'raw_file_presenter';
+      iframe.src = iframeSrc;
+      iframeInsertionPoint.innerHTML = '';  // Clear the previous file.
+      iframeInsertionPoint.append(iframe);
+    } else {
+      closeIframeView();
+    }
+  });
 }
