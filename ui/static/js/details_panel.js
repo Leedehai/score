@@ -60,6 +60,12 @@ class DetailsPanel extends HTMLElement {
     this.renderCommandInvocation_();
     this.renderOverviewSection_();
     this.renderTaskResults_();
+
+    utils.querySelectorAll('a.link_as_non_iframe_button', this).forEach((e) => {
+      e.addEventListener('click', () => {
+        e.classList.toggle('link_as_button_clicked');
+      });
+    });
   }
 
   renderTitleSection_() {
@@ -84,6 +90,7 @@ class DetailsPanel extends HTMLElement {
 
     const expandButton = document.createElement('a');
     expandButton.id = 'expansion_button';
+    expandButton.classList.add('link_as_non_iframe_button');
     expandButton.textContent = 'command invocation';
     section.append(expandButton);
     const copyButton =
@@ -145,7 +152,8 @@ class DetailsPanel extends HTMLElement {
         tooltip: 'time on processor (not wall time), std. deviation',
       },
       {
-        content: this.testInfo.runtimeStat.join(' ± ') + ' ms',
+        content: this.testInfo.runtimeStat.map(v => v.toFixed(1)).join(' ± ') +
+            ' ms',
       },
     ]);
     aggregateResultTable.addRow([
@@ -154,7 +162,8 @@ class DetailsPanel extends HTMLElement {
         tooltip: 'main memory footprint, std. deviation',
       },
       {
-        content: this.testInfo.maxrssStat.join(' ± ') + ' KB',
+        content:
+            this.testInfo.maxrssStat.map(v => v.toFixed(1)).join(' ± ') + ' KB',
       },
     ]);
     aggregateResultTable.addRow([
@@ -238,8 +247,8 @@ class DetailsPanel extends HTMLElement {
               '-',
         },
         {
-          content: taskInfo.exit[0] ? 'yes' : 'no',
-          class: taskInfo.exit[0] ? 'success' : 'error',
+          content: taskInfo.stdout[0] ? 'yes' : 'no',
+          class: taskInfo.stdout[0] ? 'success' : 'error',
         },
         {
           content: this.makeTimelineHtml_(

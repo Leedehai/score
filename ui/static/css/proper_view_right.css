@@ -44,6 +44,10 @@
   background-color: var(--bg-color);
 }
 
+.test_details_panel a.link_as_non_iframe_button.link_as_button_clicked {
+  background-color: var(--blue);
+}
+
 .test_details_panel .test_details_title {
   grid-column-start: w1;
   grid-column-end: wmax;
@@ -100,7 +104,7 @@
 
 .test_details_panel .test_details_command pre#command_text_area {
   font-family: var(--code-font);
-  font-size: var(--text-size);
+  font-size: var(--code-size);
   color: var(--fg-color);
   padding: 0 12px;
   display: none;

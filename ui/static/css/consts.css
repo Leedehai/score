@@ -48,13 +48,13 @@
   --subtitle-font: 'Open Sans', 'Helvetica', sans-serif;
   --text-big-font: 'Open Sans', 'Helvetica', sans-serif;
   --text-font: 'Open Sans', 'Helvetica', sans-serif;
-  --code-font: 'Source Sans Pro', monospace;
+  --code-font: monospace;
 
   --title-size: 22px;
   --subtitle-size: 18px;
   --text-big-size: 16px;
   --text-size: 14px;
-  --code-size: 14px;
+  --code-size: 12px;
 }
 
 :root {
