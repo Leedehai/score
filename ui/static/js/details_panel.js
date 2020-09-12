@@ -129,8 +129,7 @@ class DetailsPanel extends HTMLElement {
       },
       {
         content: this.testInfo.goldenFile ?
-            `<a href=${
-                this.testInfo.goldenFile} target="_blank">golden file</a>` :
+            this.makeAnchorHtml_('golden file', this.testInfo.goldenFile) :
             '-',
       },
     ]);
@@ -238,12 +237,12 @@ class DetailsPanel extends HTMLElement {
         },
         {
           content: taskInfo.stdout[1] ?
-              `<a href=${taskInfo.stdout[1]} target="_blank">stdout</a>` :
+              this.makeAnchorHtml_('stdout', taskInfo.stdout[1]) :
               '-',
         },
         {
           content: taskInfo.stdout[2] ?
-              `<a href=${taskInfo.stdout[2]} target="_blank">diff</a>` :
+              this.makeAnchorHtml_('diff', taskInfo.stdout[2]) :
               '-',
         },
         {
@@ -263,6 +262,19 @@ class DetailsPanel extends HTMLElement {
     section.append(resultTableMaker.finish());
 
     this.append(section);
+  }
+
+  /**
+   * @param {string} text
+   * @param {string} uri
+   * @param {boolean=} asIframe
+   * @return {string}
+   */
+  makeAnchorHtml_(text, uri, asIframe) {
+    if (asIframe) {
+      return '';
+    }
+    return `<a href=${uri} target="_blank">${text}</a>`;
   }
 
 
