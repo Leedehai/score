@@ -1,26 +1,39 @@
 [
-    {
-        "desc": "lorem",
-        "path": "normal.exe",
-        "args": [],
-        "golden": null,
-        "timeout_ms": 1500,
-        "envs": { "ENV_VAR": "1", "ANOTHER_ENV": "egg" },
-        "exit": {
-            "type": "return",
-            "repr": 0
-        }
+  {
+    "desc": "lorem_1",
+    "path": "normal.exe",
+    "args": [],
+    "golden": null,
+    "timeout_ms": 1500,
+    "envs": {
+      "ENV_VAR": "1",
+      "ANOTHER_ENV": "egg"
     },
-    {
-        "desc": "lorem",
-        "path": "normal.exe",
-        "args": [ "--print" ],
-        "golden": "mocks/lorem.gold",
-        "timeout_ms": 1500,
-        "envs": { "ENV_VAR": "1", "ANOTHER_ENV": "egg" },
-        "exit": {
-            "type": "return",
-            "repr": 0
-        }
+    "prefix": [],
+    "exit": {
+      "type": "return",
+      "repr": 0
     }
+  },
+  {
+    "desc": "lorem_2",
+    "path": "normal.exe",
+    "args": [
+      "--print"
+    ],
+    "golden": "mocks/lorem.gold",
+    "timeout_ms": 1500,
+    "envs": {
+      "ENV_VAR": "1",
+      "ANOTHER_ENV": "egg"
+    },
+    "prefix": [
+      "python",
+      "-O"
+    ],
+    "exit": {
+      "type": "return",
+      "repr": 0
+    }
+  }
 ]

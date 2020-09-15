@@ -26,6 +26,7 @@ import shutil
 import signal
 import subprocess
 import time
+from pathlib import Path
 from typing import List, Optional
 
 from pylibs import score_utils
@@ -98,8 +99,9 @@ def cap_width(s: str, width: int = TERMINAL_COLS) -> str:
 def get_metadata_from_path(path: str) -> dict:
     # docs: see EXPLANATION_STRING below
     return {
-        "desc": "", "path": path, "args": [], "envs": None, "golden": None,
-        "timeout_ms": None, "exit": {"type": "return", "repr": 0}
+        "desc": "", "path": path, "args": [], "envs": None, "prefix": [],
+        "golden": None, "timeout_ms": None,
+        "exit": {"type": "return", "repr": 0}
     }
 
 
@@ -138,35 +140,25 @@ def split_ctimer_out(s: str) -> tuple:
     return inspectee_stdout.rstrip(), ctimer_stdout.rstrip()
 
 
-# N = 16^8 = 2^32 => ~N^(1/2) = ~2^16 values produces a collision with P=50%
-# Here we ignore SHA1's hash collision vulnerabilities, because we are not doing
-# cryptography and we don't expect users to try to break their own tests.
-CASE_ID_HASH_LEN = 8  # NOTE value should sync with EXPLANATION_STRING below
-
-
-# prog = "foo", args = [], envs = {}              => return: "foo-00000000"
-# prog = "baz/bar/foo", args = [], envs = {}      => return: "bar/foo-00000000"
-# prog = "baz/bar/foo", args = [ '9' ], envs = {} => return: "bar/foo-0ade7c2c"
-def compute_comb_id(prog: str, args: list, envs: dict) -> str:
-    prog_basename = os.path.basename(prog)
-    prog_dir_basename = os.path.basename(
-        os.path.dirname(prog))  # "" if prog doesn't contain '/'
-    path_repr = os.path.join(prog_dir_basename, prog_basename)
-    hashed = '0' * CASE_ID_HASH_LEN
-    if len(args) > 0 or len(envs) > 0:
-        items_to_hash = args + [("%s=%s" % (k, envs[k])) for k in sorted(envs)]
-        hashed = hashlib.sha1(
-            ' '.join(items_to_hash).encode()).hexdigest()[:CASE_ID_HASH_LEN]
-    return "%s-%s" % (path_repr, hashed.lower())
+def compute_hashed_id(prog: str, id_name: str) -> str:
+    """
+    id_name, though already unique among tests, may contain characters like
+    ":", "/". This function returns a hashed version of id_name.
+    """
+    # In fact, desc_hashed alone can uniquely identify a test, but using
+    # path_repr makes the returned string human-friendly.
+    path_repr = str(Path(*Path(prog).parts[-2:]))
+    id_name_hashed = hashlib.sha1(id_name.encode()).hexdigest()
+    return "%s-%s" % (path_repr, id_name_hashed.lower())
 
 
 # This path stem (meaning there is no extension such as ".diff") is made of the
-# comb_id, repeat count, log_dirname. E.g.
-# comb_id = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
+# hashed_id, repeat count, log_dirname. E.g.
+# hashed_id = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
 #   => return: "./out/foo/logs/bar/foo-0ade7c2c-3"
-def get_logfile_path_stem(comb_id: str, repeat_count: int,
+def get_logfile_path_stem(hashed_id: str, repeat_count: int,
                           log_dirname: str) -> str:
-    return "%s-%s" % (os.path.join(log_dirname, comb_id), repeat_count)
+    return "%s-%s" % (os.path.join(log_dirname, hashed_id), repeat_count)
 
 
 UNEXPECTED_ERROR_FORMAT = """\n\x1b[33m[unexpected error] {desc}\x1b[0m{repeat}
@@ -311,7 +303,7 @@ def did_run_one(log_dirname: str, write_golden: bool, metadata: dict,
     exceptions = [
     ]  # list of str, describe misc errors in run_one() itself (not in test)
     filepath_stem = get_logfile_path_stem(  # "stem" means no extension name
-        metadata["comb_id"], metadata["repeat"]["count"], log_dirname)
+        metadata["hashed_id"], metadata["repeat"]["count"], log_dirname)
     stdout_filename = None if write_golden else os.path.abspath(filepath_stem +
                                                                 ".stdout")
     diff_filename = None  # will be given a str if there is need to compare and diff is found
@@ -475,7 +467,7 @@ def count_and_print_for_test_running(result_list: list,
     for result in result_list:
         if result["ok"] == False and result["error_is_flaky"] == False:
             error_result_count += 1
-            unique_error_tests.add(result["comb_id"])
+            unique_error_tests.add(result["hashed_id"])
         print_test_running_result_to_stderr(result, timer_prog)
     return error_result_count, len(unique_error_tests)
 
@@ -496,8 +488,8 @@ def run_one_impl(timer: str, log_dirname: str, write_golden: bool,
         # [1] I wrote a Python program to verify this. I set the timeout
         #     to be 10 msec and give it a infinite-loop program, when it
         #     times out the reported time usage is 14 msec, way over 10.
-        o = subprocess.check_output([timer, metadata["path"]] +
-                                    metadata["args"],
+        o = subprocess.check_output([timer] + metadata["prefix"] +
+                                    [metadata["path"]] + metadata["args"],
                                     stderr=subprocess.DEVNULL,
                                     env=env_values)
         stdout = o.decode(errors="backslashreplace").rstrip()
@@ -561,6 +553,7 @@ def validate_metadata_schema_noexcept(
             "desc": str,
             "path": str,
             "args": [str],
+            "prefix": [str],
             "golden": schema.Or(str, None),
             "timeout_ms": schema.And(int, lambda v: v > 0),
             "envs": {schema.Optional(str): str},
@@ -713,13 +706,10 @@ def main():
     for i, metadata in enumerate(metadata_list):
         if i in ignore_metadata_indexes:
             continue
-        # case id is unique for every (path, args) combination
-        comb_id = compute_comb_id(
-            prog=metadata["path"],
-            args=metadata["args"],
-            envs=metadata["envs"] if metadata["envs"] != None else {})  # str
-        metadata["comb_id"] = comb_id  # str
-        metadata["flaky_errors"] = flakiness_dict.get(comb_id, [])
+        hashed_id = compute_hashed_id(prog=metadata["path"],
+                                      id_name=metadata["desc"])  # str
+        metadata["hashed_id"] = hashed_id  # str
+        metadata["flaky_errors"] = flakiness_dict.get(hashed_id, [])
         for repeat_cnt in range(args.repeat):
             metadata_copy = copy.deepcopy(metadata)
             metadata_copy["repeat"] = {

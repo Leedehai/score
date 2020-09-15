@@ -54,8 +54,8 @@ def generate_result_dict(metadata: dict, ctimer_reports: dict, match_exit: bool,
         ("path", metadata["path"]),  # str
         ("args", metadata["args"]),  # list
         ("envs", metadata["envs"]),  # dict or None
-        ("comb_id",
-         metadata["comb_id"]),  # unique for every (path, args) combination
+        ("prefix", metadata["prefix"]),  # list
+        ("hashed_id", metadata["hashed_id"]),
         ("flaky_errors",
          metadata["flaky_errors"]),  # list of str, the expected errors
         ("repeat", metadata["repeat"]),  # dict { "count": int, "all": int }

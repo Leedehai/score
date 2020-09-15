@@ -8,8 +8,8 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     time (not wall time) with timeout. The program's interface satisfies:
     [example] https://github.com/Leedehai/ctimer (mine)
     inputs:
-        commandline arguments:
-            the invocation of the inspected program
+        command-line string:
+            the full invocation of the inspected program
         environment variable CTIMER_TIMEOUT:
             timeout value (ms); 0 means effectively infinite time
         environment variable CTIMER_STATS:
@@ -40,15 +40,17 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     The metadata file could be either hand-written or script-generated; it
     stores in JSON format an array of metadata objects. Each has keys:
         "desc"    : string
-            description of the test
+            description of the test (used as unique ID)
         \x1b[33m=== parameters contolling command invocation ===\x1b[0m
         "path"    : string
             path to the test executable binary
         "args"    : array of strings
             the commandline arguments
-        "envs"  : dict or null
+        "envs"    : dict or null
             environment variables provided when running the test executable
             * each entry's key and value are strings without spaces
+        "prefix"  : array of strings
+            command prefix (e.g. driver invocation) for the test binary
         \x1b[33m=== parameters controlling test checking ===\x1b[0m
         "golden"  : string or null
             path to the golden file; null: not needed
@@ -71,7 +73,7 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     test executable paths in commandline. Other fields required by a metadata
     object (see above) of each test will automatically get these values:
         desc = "", path = (the path provided with this option),
-        args = [], envs = null, golden = null, timeout_ms = null,
+        args = [], envs = null, prefix = [], golden = null, timeout_ms = null,
         exit = { "type": "return", "repr": 0 } (exit status, see below)
     * mutually exclusive: --meta, --paths
 
@@ -91,11 +93,11 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
            'or') of WrongExitCode, Timeout, Signal, StdoutDiff, Others
         * you should ensure the field 1 of each entry is unique across all
           flakiness declaration files
-        * joining the fields 1 and 2 with '-' produces the 'comb_id' (the ID
+        * joining the fields 1 and 2 with '-' produces the 'hashed_id' (the ID
           for each unique path + args combination) in each result object in
           the master log
         * e.g.: a line could be "foo/bar-test 00000000 Timeout|StdoutDiff",
-          and its 'comb_id' in the master log is "foo/bar-test-00000000"
+          and its 'hashed_id' in the master log is "foo/bar-test-00000000"
 
 \x1b[33m'--write-golden':\x1b[0m
     Use this option to create or overwrite golden files of tests. Tests with

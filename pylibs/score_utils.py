@@ -10,7 +10,7 @@ import platform
 import textwrap
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty()
 
@@ -45,6 +45,17 @@ def maybe_start_with_home_prefix(p: Path) -> Path:
 CTIMER_TIMEOUT_ENVKEY = "CTIMER_TIMEOUT"
 
 
+def _wrap_to_multiline(text: str, indents: str) -> List[str]:
+    return textwrap.wrap(
+        text=text,
+        width=70,
+        initial_indent=indents * 2,
+        subsequent_indent=indents * 3,
+        break_long_words=False,
+        break_on_hyphens=False,
+    )
+
+
 def make_command_invocation_str(timer_path: Optional[str],
                                 params: dict,
                                 indent: int = 0,
@@ -66,15 +77,11 @@ def make_command_invocation_str(timer_path: Optional[str],
         strs.append("{0}{1}={2} {3}".format(indents, CTIMER_TIMEOUT_ENVKEY,
                                             get_timeout(params["timeout_ms"]),
                                             timer_path))
-    # Driver and arguments.
-    strs += textwrap.wrap(
-        text="%s %s" % (params["path"], ' '.join(params["args"])),
-        width=70,
-        initial_indent=indents * 2,
-        subsequent_indent=indents * 3,
-        break_long_words=False,
-        break_on_hyphens=False,
-    )
+    # Command prefix
+    strs += _wrap_to_multiline(' '.join(params["prefix"]), indents)
+    # Test binary and arguments.
+    strs += _wrap_to_multiline(
+        "%s %s" % (params["path"], ' '.join(params["args"])), indents)
     invocation = " \\\n".join(strs)
     # Add working directory comment, if specified.
     if working_directory:

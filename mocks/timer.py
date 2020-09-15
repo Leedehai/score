@@ -49,18 +49,18 @@ env_var = os.environ.get("ENV_VAR", None)
 assert (env_var and env_var == "1")
 
 args = sys.argv[1:]
-assert (len(args) >= 1)
+assert len(args) >= 1
 if args[0] == "timeout.exe":
-    if len(args) == 2 and args[1] == "--print":
+    if len(args) >= 2 and args[1] == "--print":
         print(INSPECTEE_STDOUT_RAW)
-    if len(args) == 2 and args[1] == "--tweak-stdout":
+    if len(args) >= 2 and args[1] == "--tweak-stdout":
         print(INSPECTEE_STDOUT_RAW_TWEAKED)
     stats = STATS_JSON % ("timeout", 1500, 1500.02)
     print(delimiter + stats + delimiter)
 else:
-    if len(args) == 2 and args[1] == "--print":
+    if len(args) >= 2 and args[-1] == "--print":
         print(INSPECTEE_STDOUT_RAW)
-    if len(args) == 2 and args[1] == "--tweak-stdout":
+    if len(args) >= 2 and args[-1] == "--tweak-stdout":
         print(INSPECTEE_STDOUT_RAW_TWEAKED)
     stats = STATS_JSON % ("return", 0, 1.01)
     print(delimiter + stats + delimiter)

@@ -1,62 +1,88 @@
 [
-    {
-        "desc": "lorem",
-        "path": "normal.exe",
-        "args": [],
-        "golden": null,
-        "timeout_ms": 1500,
-        "envs": { "ENV_VAR": "1", "ANOTHER_ENV": "egg" },
-        "exit": {
-            "type": "return",
-            "repr": 0
-        }
+  {
+    "desc": "lorem_1",
+    "path": "normal.exe",
+    "args": [],
+    "golden": null,
+    "timeout_ms": 1500,
+    "envs": {
+      "ENV_VAR": "1",
+      "ANOTHER_ENV": "egg"
     },
-    {
-        "desc": "lorem",
-        "path": "normal.exe",
-        "args": [],
-        "golden": "mocks/lorem.gold",
-        "timeout_ms": 1500,
-        "envs": { "ENV_VAR": "1", "ANOTHER_ENV": "egg" },
-        "exit": {
-            "type": "return",
-            "repr": 0
-        }
-    },
-    {
-        "desc": "lorem",
-        "path": "normal.exe",
-        "args": [ "--print" ],
-        "golden": "mocks/do_not_create.gold",
-        "timeout_ms": 1500,
-        "envs": { "ENV_VAR": "1", "ANOTHER_ENV": "egg" },
-        "exit": {
-            "type": "return",
-            "repr": 0
-        }
-    },
-    {
-        "desc": "lorem",
-        "path": "normal.exe",
-        "args": [ "--tweak-stdout" ],
-        "golden": "mocks/lorem.gold",
-        "timeout_ms": 1500,
-        "envs": { "ENV_VAR": "1", "ANOTHER_ENV": "egg" },
-        "exit": {
-            "type": "return",
-            "repr": 0
-        }
-    },
-    {
-        "desc": "lorem",
-        "path": "timeout.exe",
-        "args": [ "--print" ],
-        "golden": "mocks/lorem.gold",
-        "timeout_ms": 1500,
-        "envs": { "ENV_VAR": "1", "ANOTHER_ENV": "egg" },
-        "exit": {
-            "type": "return",
-            "repr": 0
-        }
+    "prefix": [],
+    "exit": {
+      "type": "return",
+      "repr": 0
     }
+  },
+  {
+    "desc": "lorem_2",
+    "path": "normal.exe",
+    "args": [],
+    "golden": "mocks/lorem.gold",
+    "timeout_ms": 1500,
+    "envs": {
+      "ENV_VAR": "1",
+      "ANOTHER_ENV": "egg"
+    },
+    "prefix": [],
+    "exit": {
+      "type": "return",
+      "repr": 0
+    }
+  },
+  {
+    "desc": "lorem_3",
+    "path": "normal.exe",
+    "args": [
+      "--print"
+    ],
+    "golden": "mocks/do_not_create.gold",
+    "timeout_ms": 1500,
+    "envs": {
+      "ENV_VAR": "1",
+      "ANOTHER_ENV": "egg"
+    },
+    "prefix": [],
+    "exit": {
+      "type": "return",
+      "repr": 0
+    }
+  },
+  {
+    "desc": "lorem_4",
+    "path": "normal.exe",
+    "args": [
+      "--tweak-stdout"
+    ],
+    "golden": "mocks/lorem.gold",
+    "timeout_ms": 1500,
+    "envs": {
+      "ENV_VAR": "1",
+      "ANOTHER_ENV": "egg"
+    },
+    "prefix": [],
+    "exit": {
+      "type": "return",
+      "repr": 0
+    }
+  },
+  {
+    "desc": "lorem_5",
+    "path": "timeout.exe",
+    "args": [
+      "--print"
+    ],
+    "golden": "mocks/lorem.gold",
+    "timeout_ms": 1500,
+    "envs": {
+      "ENV_VAR": "1",
+      "ANOTHER_ENV": "egg"
+    },
+    "prefix": [],
+    "exit": {
+      "type": "return",
+      "repr": 0
+    }
+  }
 ]

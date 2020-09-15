@@ -24,7 +24,7 @@ if [ $(ls logs1/*.stdout | wc -l) -ne 2 ] ; then
     ls logs1/*.stdout
     has_error=1
 fi
-if [ $(ls logs1/*.diff.html | wc -l) -ne 0 ] ; then
+if [ $(ls logs1/*.diff.html 2> /dev/null | wc -l) -ne 0 ] ; then
     printf "\033[31;1m*.diff.html count incorrect (expect 0):\n\033[0m"
     ls logs1/*.diff.html
     has_error=1
@@ -54,8 +54,8 @@ if [ ! -f logs2/log.json ] ; then
     printf "\033[31;1mmissing: logs1/log.json\n\033[0m"
     has_error=1
 fi
-if [ $(ls logs2/*.stdout | wc -l) -ne 4 ] ; then
-    printf "\033[31;1m*.stdout count incorrect (expect 4):\n\033[0m"
+if [ $(ls logs2/*.stdout | wc -l) -ne 5 ] ; then
+    printf "\033[31;1m*.stdout count incorrect (expect 5):\n\033[0m"
     ls logs2/*.stdout
     has_error=1
 fi
