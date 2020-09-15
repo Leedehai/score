@@ -11,8 +11,6 @@ import difflib
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
-from pylibs.score_utils import maybe_start_with_home_prefix
-
 _MISSING_EXPECTED_FILE_HTML_FORMAT = """
 <div style='width:80ch; padding:1ch'>
     <b style='font-family:Courier;font-size:24px;color:red;text-align:center'>
@@ -103,12 +101,10 @@ def get_diff_html_str(
         "title": html_title,
         "diff_head": _DIFF_HEAD,
         "description": desc,
-        "expected_filepath": maybe_start_with_home_prefix(
-            Path(expected_filename).absolute()),
+        "expected_filepath": Path(expected_filename).absolute(),
         "expected_filesize": _get_size_str(expected_filename)
         if found_expected else "not found",
-        "actual_filepath": maybe_start_with_home_prefix(
-            Path(actual_filename).absolute()),
+        "actual_filepath": Path(actual_filename).absolute(),
         "actual_filesize": _get_size_str(actual_filename),
         "error_box": "",
         "diff_table": diff_table_str,

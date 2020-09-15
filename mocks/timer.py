@@ -38,7 +38,7 @@ STATS_JSON = """{
     "exit" : {
         "type" : "%s",
         "repr" : %d,
-        "desc" : "exit code"
+        "id" : "exit code"
     },
     "times_ms" : {
         "total" : %f

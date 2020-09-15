@@ -1,6 +1,6 @@
 [
   {
-    "desc": "lorem_1",
+    "id": "lorem_1",
     "path": "normal.exe",
     "args": [],
     "golden": null,
@@ -16,7 +16,7 @@
     }
   },
   {
-    "desc": "lorem_2",
+    "id": "lorem_2",
     "path": "normal.exe",
     "args": [
       "--print"

@@ -1,7 +1,8 @@
 # for Travis CI
 language: python
 python:
-  - "3.7"
+  # typing.OrderedDict is added since 3.7.2, but Python 3.7 is 3.7.1 on Travis.
+  - "3.8"
 os:
   # Travis doesn't support testing Python projects on macOS, as of today
   - linux

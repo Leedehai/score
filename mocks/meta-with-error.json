@@ -1,6 +1,6 @@
 [
   {
-    "desc": "lorem_1",
+    "id": "lorem_1",
     "path": "normal.exe",
     "args": [],
     "golden": null,
@@ -16,7 +16,7 @@
     }
   },
   {
-    "desc": "lorem_2",
+    "id": "lorem_2",
     "path": "normal.exe",
     "args": [],
     "golden": "mocks/lorem.gold",
@@ -32,7 +32,7 @@
     }
   },
   {
-    "desc": "lorem_3",
+    "id": "lorem_3",
     "path": "normal.exe",
     "args": [
       "--print"
@@ -50,7 +50,7 @@
     }
   },
   {
-    "desc": "lorem_4",
+    "id": "lorem_4",
     "path": "normal.exe",
     "args": [
       "--tweak-stdout"
@@ -68,7 +68,7 @@
     }
   },
   {
-    "desc": "lorem_5",
+    "id": "lorem_5",
     "path": "timeout.exe",
     "args": [
       "--print"

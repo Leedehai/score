@@ -21,7 +21,8 @@ from pylibs import score_utils
 
 UI_ASSETS_DIR: Path = Path(__file__).parent.joinpath("ui")
 
-# Store data in native JS data structures. Altenatives and reasons of not using:
+# Store data in native JS data structures. Alternatives and reasons of not
+# using:
 # 1. localStorage/sessionStorage: too restrictive on value types (strings only).
 # 2. IndexedDB: we don't want data to be persistent across reloads, as the data
 #    may change (if you want to update the DB with the changed data, you
@@ -93,7 +94,7 @@ def _jsify_dict(d: dict, stringify: Optional[bool] = False) -> Union[dict, str]:
 class TaskResGetter:
     # The getters are incomplete, as some fields are not accessed by this script.
     test_id: Callable[[dict], str] = \
-        lambda e: e["desc"] # Mutiple tasks may share the same test ID.
+        lambda e: e["id"] # Multiple tasks may share the same test ID.
     ok: Callable[[dict], bool] = \
         lambda e: e["ok"]
     repeat: Callable[[dict], dict] = \
@@ -338,21 +339,15 @@ def generate_web_view(
     """
     Params:
 
-    num_jobs: Number of parallel workers to generate view.
-
-    test_title: The title you want to display on the page's tab and head.
-
-    master_log: Path to the JSON log produced by the test runner.
-
-    test_exec_path: The working directory at which all test commands were run.
-
-    timer_path: Path to the timer program used by the test runner, if one is
-    used.
-
-    additional_info: Information you want to display additionally (list of
-    lines). If None, the info area isn't shown (different from an empty list).
-
-    generate_to_dir: Where to write the files produced by this generator.
+    * num_jobs: Number of parallel workers to generate view.
+    * test_title: The title you want to display on the page's tab and head.
+    * master_log: Path to the JSON log produced by the test runner.
+    * test_exec_path: The working directory at which all test commands were run.
+    * timer_path: Path to the timer program used by the test runner, if one is
+      used.
+    * additional_info: Information you want to display additionally (list of
+      lines). If None, the info area isn't shown (different from an empty list).
+    * generate_to_dir: Where to write the files produced by this generator.
 
     Returns:
 
@@ -369,10 +364,10 @@ def generate_web_view(
             if not isinstance(task_result_list, list):
                 raise TypeError("log data ought to be a list, but found %s" %
                                 type(task_result_list).__name__)
-            # In the log, the "desc" key is shared by repeated tasks that
+            # In the log, the "id" key is shared by repeated tasks that
             # correspond to the same test. Sorting ensures:
             # 1. Tasks are sorted in ascending order alphabetically according
-            #    to the "desc" key.
+            #    to the "id" key.
             # 2. Tasks that correspond to the same test are put together, in
             #    ascending order according to the repeat count 1...k.
             compute_sort_key = lambda e: (TaskResGetter.test_id(e),
@@ -436,7 +431,6 @@ def main():
         additional_info=None,
         generate_to_dir=Path(args.to_dir),
     )
-    print("Written: %s" % html_file_path)
     return 0
 
 

@@ -6,64 +6,100 @@
 # ---------------------------
 # Parse flakiness declaration files under a given directory.
 
-import sys, os
-import re
+import json
+import os
+import sys
+from io import StringIO, TextIOWrapper
+from pathlib import Path
+from typing import Dict, List, Optional
 
-EXPECTED_ERRS = { # Sync with EXPLANATION_STRING in score_run.py
-    "WrongExitCode", "Timeout", "Signal", "StdoutDiff", "Others"
-}
-def _valid_expected_errs(s):
-    return all(e in EXPECTED_ERRS for e in s.split('|'))
+from pylibs import schema
 
-def _parse_file(filename, flakiness_dict, errors):
-    with open(filename, 'r') as f:
-        raw_lines = f.readlines()
-    for i, line in enumerate(raw_lines):
-        line = line.strip()
-        if len(line) == 0 or line.startswith('#'):
-            continue
-        if line.startswith("ignored"):
-            continue
-        line = line[:line.index('#')] if ('#' in line) else line
-        parts = line.split()
-        if len(parts) != 3:
-            errors.append("[Error] malformed entry at %s:%s" % (filename, i + 1))
-            continue
-        if any(c not in '01234567890abcdef' for c in parts[1]): # not 'int(parts[1], 16)' to avoid negative sign
-            errors.append("[Error] invalid lowercase base16 string '%s' at %s:%s" % (
-                parts[1], filename, i + 1))
-            continue
-        if not _valid_expected_errs(parts[2]):
-            errors.append(
-                "[Error] invalid error '%s' at %s:%s\n" % (parts[2], filename, i + 1)
-              + "        should be one or more (joined with '|': nonexclusive 'or') of %s" % ", ".join(EXPECTED_ERRS))
-            continue
-        case_id = "%s-%s" % (parts[0], parts[1]) # test path and args
-        if case_id in flakiness_dict:
-            errors.append("[Error] duplicate test (path, args) combination at %s:%s" % (
-                filename, i + 1))
-            continue
-        flakiness_dict[case_id] = parts[2].split('|') # the expected errors
+POSSIBLE_TEST_ERRORS = [  # sync with EXPLANATION_STRING's spec
+    "wrong_exit_code", "timeout", "signal", "stdout_diff", "quit", "unknown"
+]
+
+FlakeDecls = Dict[str, List[str]]
+
+
+def _parse_file(f: TextIOWrapper, path: Path, flaky_tests_decls: FlakeDecls,
+                errors: List[str]) -> None:
+    try:
+        data = json.load(f)
+    except json.JSONDecodeError:
+        errors.append("not a JSON file: %s" % path)
+        data = {}
+    try:
+        schema.Schema({  # sync with EXPLANATION_STRING's spec
+            str: {
+                "errors": [schema.Or(*POSSIBLE_TEST_ERRORS)],
+                schema.Optional("reason"): str,
+                schema.Optional(str): object,  # Allow more fields, if any.
+            }
+        }).validate(data)
+        for test_id, tolerable_errors in data.items():
+            if test_id in flaky_tests_decls:
+                errors.append(
+                    "test %s declared in file %s, but it was declared in a previous file."
+                    % (test_id, path))
+            flaky_tests_decls[test_id] = tolerable_errors
+    except schema.SchemaError as e:  # Carries explanations.
+        errors.append(str(e))
+
+
+# Sync with EXPLANATION_STRING's spec
+FLAKY_TEST_RECORD_FILE_SUFFIX = ".flakes.json"
+
 
 # export
-# @param dirpath: str - directory that stores flakiness declaration files
-# @return dict - key: str - test case_id, value: list of str - expected errors
-def parse_flakiness_decls(dirpath):
-    if (dirpath == None) or (dirpath == "") or (not os.path.isdir(dirpath)):
-        return {} # empty instead of reporting an error
-    file_count, flakiness_dict, errors = 0, {}, []
-    for item in [ e for e in os.listdir(dirpath) if e.endswith(".flaky") ]:
-        pathname = os.path.join(dirpath, item)
-        if not os.path.isfile(pathname):
+def maybe_parse_flakiness_decls_from_dir(
+        dirpath: Optional[Path]) -> Dict[str, List[str]]:
+    if (dirpath == None) or (not dirpath.is_dir()):
+        return {}
+    file_count: int = 0
+    flaky_tests_decls: FlakeDecls = {}
+    errors: List[str] = []
+    for item in [
+            e for e in os.listdir(dirpath)
+            if e.endswith(FLAKY_TEST_RECORD_FILE_SUFFIX)
+    ]:
+        path = Path(dirpath, item)
+        if not path.is_file():
             continue
         file_count += 1
-        _parse_file(pathname, flakiness_dict, errors)
-    if len(errors):
+        with open(path, 'r') as f:
+            _parse_file(f, path, flaky_tests_decls, errors)
+    if len(errors) > 0:
         sys.exit('\n'.join(errors))
     if file_count == 0:
-        sys.stderr.write(
-            "[Warning] no file is named *.flaky under %s\n" % dirpath)
-    return flakiness_dict
+        sys.stderr.write("[Warning] no file is named *%s under %s\n" %
+                         (FLAKY_TEST_RECORD_FILE_SUFFIX, dirpath))
+    return flaky_tests_decls
 
-if __name__ == "__main__":
-    print(parse_flakiness_decls(sys.argv[1]))
+
+EXAMPLE_STRING_STREAM = StringIO("""{
+  "lorem_1": {
+    "errors": [
+      "wrong_exit_code"
+    ],
+    "reason": "blah"
+  },
+  "lorem_2": {
+    "errors": [
+      "timeout",
+      "signal"
+    ]
+  }
+}""")
+
+
+def smoke_test():
+    decls = {}
+    errors = []
+    _parse_file(EXAMPLE_STRING_STREAM, Path("[smoketest]"), decls, errors)
+    print(decls)
+    print(errors)
+
+
+if __name__ == "__main__":  # Smoke testing.
+    sys.exit(smoke_test())

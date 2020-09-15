@@ -20,7 +20,7 @@ def info_s(s: str) -> str:
 
 
 def error_s(s: str) -> str:
-    return ("\x1b[1merror:\x1b[0m" if IS_ATTY else "1merror:") + (" %s\n" % s)
+    return ("\x1b[1merror:\x1b[0m" if IS_ATTY else "error:") + (" %s\n" % s)
 
 
 INFINITE_TIME = 0  # it means effectively infinite time required by timer

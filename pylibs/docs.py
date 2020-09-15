@@ -39,8 +39,8 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     This option passes the path of a file containing the metadata of tests.
     The metadata file could be either hand-written or script-generated; it
     stores in JSON format an array of metadata objects. Each has keys:
-        "desc"    : string
-            description of the test (used as unique ID)
+        "id"      : string
+            unique description, also the test id
         \x1b[33m=== parameters contolling command invocation ===\x1b[0m
         "path"    : string
             path to the test executable binary
@@ -72,32 +72,21 @@ EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
     option over '--meta', as it can be invoked with a list of space-separated
     test executable paths in commandline. Other fields required by a metadata
     object (see above) of each test will automatically get these values:
-        desc = "", path = (the path provided with this option),
+        desc = (serial number), path = (the path provided with this option),
         args = [], envs = null, prefix = [], golden = null, timeout_ms = null,
         exit = { "type": "return", "repr": 0 } (exit status, see below)
     * mutually exclusive: --meta, --paths
 
-\x1b[33m'--flakiness':\x1b[0m
-    Not unusually, some tests are flaky (e.g. due to CPU scheduling or a bug
-    in language runtime). Use this option to specify a directory that stores
-    all declaration files. Under this directory, all files whose names match
-    the glob pattern "*.flaky" will be loaded.
-    In a declaration file, characters following '#' in a line are treated as
-    comments. Each non-comment line is a flakiness declaration entry with
-    space-separated string fields in order:
-        1. test executable path (last two path components joined with '/')
-        2. case id hash string (computed from commandline arguments and
-           alphabetically-sorted environment variables) as appeared on the
-           corresponding result object.
-        3. type of expected error: one or more (joined by '|': non-exclusive
-           'or') of WrongExitCode, Timeout, Signal, StdoutDiff, Others
-        * you should ensure the field 1 of each entry is unique across all
-          flakiness declaration files
-        * joining the fields 1 and 2 with '-' produces the 'hashed_id' (the ID
-          for each unique path + args combination) in each result object in
-          the master log
-        * e.g.: a line could be "foo/bar-test 00000000 Timeout|StdoutDiff",
-          and its 'hashed_id' in the master log is "foo/bar-test-00000000"
+\x1b[33m'--read-flakes':\x1b[0m
+    Not unusually, some tests are flaky. Use this option to specify a
+    directory that stores files that declare the flaky tests to tolerate.
+    Under this directory, all files whose names match the glob pattern
+    "*.flakes.json" will be loaded (as JSON).
+    Each file stores a dict. The key is the test id, and each value is a
+    sub-level dict that stores key-value pairs:
+        "errors": list of string, one of "wrong_exit_code", "timeout",
+                  "signal", "stdout_diff", "quit", "unknown"
+        "reason": string, optional
 
 \x1b[33m'--write-golden':\x1b[0m
     Use this option to create or overwrite golden files of tests. Tests with
