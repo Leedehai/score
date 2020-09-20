@@ -47,13 +47,13 @@ from pylibs.runner_print import (
     print_one_task_realtime_log,
     print_summary_report,
 )
-from pylibs.score_utils import info_s, error_s
+from pylibs.score_utils import err_exit, info_s, error_s
 from pylibs import schema
 
 
 # Set signal handlers
 def sighandler(sig, frame):  # pylint: disable=unused-argument
-    sys.exit(1)  # Do not print: it's ugly if all workers print simultaneously.
+    sys.exit(2)  # Do not print: it's ugly if all workers print simultaneously.
 
 
 signal.signal(signal.SIGINT, sighandler)  # type: ignore
@@ -88,7 +88,7 @@ def pool_map(
         except KeyboardInterrupt:
             pool.terminate()
             pool.join()
-            sys.exit("Process pool terminated and child processes joined")
+            err_exit("Process pool terminated and child processes joined")
         pool.close()
         pool.join()
         # This should be called after worker threads are joined to avoid
@@ -231,7 +231,7 @@ def remove_prev_log(log_dir: str) -> None:
         # from a previous run exist
         shutil.rmtree(log_dir)
     elif os.path.exists(log_dir):
-        sys.exit(error_s("path exists as a non-directory: %s" % log_dir))
+        err_exit(error_s("path exists as a non-directory: %s" % log_dir))
 
 
 # Used by run_one()
@@ -335,7 +335,7 @@ def make_metadata_list(args: Args) -> List[TaskMetadata]:
     if len(args.paths) > 0:
         missing_executables = [e for e in args.paths if not os.path.isfile(e)]
         if len(missing_executables) > 0:
-            sys.exit(
+            err_exit(
                 error_s("the following executable(s) "
                         "are not found: %s" % str(missing_executables)))
         metadata_list = [
@@ -344,20 +344,20 @@ def make_metadata_list(args: Args) -> List[TaskMetadata]:
         ]
     elif args.meta != None:
         if not os.path.isfile(args.meta):
-            sys.exit(error_s("'--meta' file not found: %s" % args.meta))
+            err_exit(error_s("'--meta' file not found: %s" % args.meta))
         with open(args.meta, 'r') as f:
             try:
                 metadata_list = json.load(f)
             except ValueError:
-                sys.exit(error_s("not a valid JSON file: %s" % args.meta))
+                err_exit(error_s("not a valid JSON file: %s" % args.meta))
         error_str = validate_metadata_schema_noexcept(metadata_list)
         if error_str:
-            sys.exit(
+            err_exit(
                 error_s("metadata format is bad; check out '--docs'\n\t%s" %
                         error_str))
         repeated_ids = find_repeated_test_id(e["id"] for e in metadata_list)
         if len(repeated_ids) > 0:
-            sys.exit(error_s("test ID repeated: %s" % ", ".join(repeated_ids)))
+            err_exit(error_s("test ID repeated: %s" % ", ".join(repeated_ids)))
     else:
         raise RuntimeError("Should not reach here")
     return metadata_list
@@ -376,7 +376,7 @@ def process_metadata_list(
             "Are you sure? [y/N] >> ")
         consent = input(prompt)
         if consent.lower() != "y":
-            sys.exit("Aborted.")
+            err_exit("Aborted.")
         ignore_metadata_indexes = [
             i for (i, m) in enumerate(metadata_list) if m["golden"] == None
         ]
@@ -439,7 +439,9 @@ def main():
         description="Test runner: with timer, logging, diff in HTML",
         epilog="Unless '--docs' is given, exactly one of '--paths' "
         "and '--meta' is needed.\n"
-        "Program exit code is 0 on success, 1 otherwise.")
+        "Program exits with 0 on success, 1 on test errors, "
+        "2 on internal errors.",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--timer",
                         metavar="TIMER",
                         type=str,
@@ -490,24 +492,24 @@ def main():
         return 0
 
     if args.timer == None:
-        sys.exit(error_s("'--timer' is not given; use '-h' for help"))
+        err_exit(error_s("'--timer' is not given; use '-h' for help"))
     elif not os.path.isfile(args.timer):
-        sys.exit(error_s("timer program not found: %s" % args.timer))
+        err_exit(error_s("timer program not found: %s" % args.timer))
     args.timer = os.path.relpath(args.timer)
 
     if ((len(args.paths) == 0 and args.meta == None)
             or (len(args.paths) > 0 and args.meta != None)):
-        sys.exit(
+        err_exit(
             error_s("exactly one of '--paths' and '--meta' should be given."))
     if args.repeat != 1 and args.write_golden:
-        sys.exit(
+        err_exit(
             error_s("'--repeat' and '--write-golden' cannot be used together."))
     if args.read_flakes and not os.path.isdir(args.read_flakes):
-        sys.exit(error_s("directory not found: %s" % args.read_flakes))
+        err_exit(error_s("directory not found: %s" % args.read_flakes))
 
     metadata_list = make_metadata_list(args)
     if metadata_list == None or len(metadata_list) == 0:
-        sys.exit(error_s("no test found."))
+        err_exit(error_s("no test found."))
 
     metadata_list_processed, unique_test_count = process_metadata_list(
         metadata_list, args)

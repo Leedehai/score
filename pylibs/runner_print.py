@@ -25,7 +25,7 @@ IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty()
 TERMINAL_COLS = int(os.popen('stty size',
                              'r').read().split()[1]) if IS_ATTY else 70
 if TERMINAL_COLS <= 25:
-    sys.exit(
+    score_utils.err_exit(
         score_utils.error_s("terminal width (%d) is rediculously small" %
                             TERMINAL_COLS))
 
@@ -37,7 +37,7 @@ def cap_width(s: str, width: int = TERMINAL_COLS) -> str:
 
 def get_error_summary(task_result: TaskResult) -> Dict[str, Optional[str]]:
     if task_result["exit"]["ok"] == False:
-        # do not use str(dir(..)): have ugly 'u' prefixes for unicode strings
+        # do not use str(dir(..)): have ugly 'u' prefixes for Unicode strings
         real_exit = task_result["exit"]["real"]
         exit_error = "{ type: %s, repr: %s }" % (real_exit["type"],
                                                  real_exit["repr"])

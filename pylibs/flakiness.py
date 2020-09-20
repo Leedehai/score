@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from pylibs import schema
+from pylibs.score_utils import err_exit, error_s
 
 POSSIBLE_TEST_ERRORS = [  # sync with EXPLANATION_STRING's spec
     "wrong_exit_code", "timeout", "signal", "stdout_diff", "quit", "unknown"
@@ -70,7 +71,7 @@ def maybe_parse_flakiness_decls_from_dir(
         with open(path, 'r') as f:
             _parse_file(f, path, flaky_tests_decls, errors)
     if len(errors) > 0:
-        sys.exit('\n'.join(errors))
+        err_exit(error_s('\n'.join(errors)))
     if file_count == 0:
         sys.stderr.write("[Warning] no file is named *%s under %s\n" %
                          (FLAKY_TEST_RECORD_FILE_SUFFIX, dirpath))

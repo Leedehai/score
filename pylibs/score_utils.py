@@ -15,6 +15,11 @@ from typing import List, Optional
 IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty()
 
 
+def err_exit(message: str):
+    sys.stderr.write(message)
+    sys.exit(2)
+
+
 def info_s(s: str) -> str:
     return ("\x1b[1minfo:\x1b[0m" if IS_ATTY else "info:") + (" %s\n" % s)
 
