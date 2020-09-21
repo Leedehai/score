@@ -1,5 +1,5 @@
 # Copyright (c) 2020 Leedehai. All rights reserved.
-# Use of this source code is governed under the LICENSE.txt file.
+# Use of this source code is governed under the MIT LICENSE.txt file.
 
 EXPLANATION_STRING = """\x1b[33mSupplementary docs\x1b[0m
 

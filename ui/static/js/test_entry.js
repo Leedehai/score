@@ -1,5 +1,5 @@
 // Copyright (c) 2020 Leedehai. All rights reserved.
-// Use of this source code is governed under the LICENSE.txt file.
+// Use of this source code is governed under the MIT LICENSE.txt file.
 
 /**
  * @enum {string} String, because HTML attribute names are strings.

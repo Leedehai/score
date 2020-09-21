@@ -1,5 +1,5 @@
 // Copyright (c) 2020 Leedehai. All rights reserved.
-// Use of this source code is governed under the LICENSE.txt file.
+// Use of this source code is governed under the MIT LICENSE.txt file.
 
 // We can't use ES6 import (see README.md), so we have to use object
 // scoping to simulate a namespace.
