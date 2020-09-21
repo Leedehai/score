@@ -10,7 +10,11 @@ function run() {
   window.dataState = new DataState();
 
   // Initialize persistent states.
-  window.dataState.testIds = Array.from(dataStorage.testData.keys()).sort();
+  const collator = new Intl.Collator(undefined, {
+    numeric: true,  // Such that "1" < "2" < "10", "" < "1", "a:a" < "a1:a".
+  });
+  window.dataState.testIds =
+      Array.from(dataStorage.testData.keys()).sort(collator.compare);
   if (window.sessionStorage.getItem('random_error')) {  // Demo error effects.
     console.warn(
         'some test results are set to error for demo with P=0.5; to undo: ' +
