@@ -30,6 +30,8 @@ class DetailsPanel extends HTMLElement {
   disconnectedCallback() {
     const placeholder = utils.querySelector('#entry_details_view #placeholder');
     placeholder.classList.remove('hidden');
+    const detailsView = utils.querySelector('#entry_details_view');
+    detailsView.classList.remove('iframe_opened');
     const iframeView = utils.querySelector('#iframe_view');
     iframeView.classList.remove('iframe_opened');
   }
@@ -441,8 +443,9 @@ function configureIframeViewAnchor(span, iframeSrc) {
     if (now_opened) {
       detailsView.classList.add('iframe_opened');
       iframeView.classList.add('iframe_opened');
-      iframeDescText.textContent = utils.capWidthByMiddleEllipsis(
-          iframeSrc, iframeDescText.scrollWidth / 9);
+      // Don't use iframeDescText.scrollWidth, since <span>'s scrollWidth is 0.
+      iframeDescText.textContent =
+          utils.capWidthByMiddleEllipsis(iframeSrc, iframeView.scrollWidth / 9);
       iframeOpenLink.setAttribute('href', iframeSrc);
       const copyButton = utils.makeCopyButton(iframeSrc, 'span', 'copy_link');
       // Don't use utils.querySelector() here, because the resultant

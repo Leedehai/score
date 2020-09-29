@@ -57,6 +57,16 @@
   --code-size: 12px;
 }
 
+@media (max-width: 1440px) {
+  :root {
+    --title-size: 20px;
+    --subtitle-size: 16px;
+    --text-big-size: 14px;
+    --text-size: 12px;
+    --code-size: 12px;
+  }
+}
+
 :root {
   --proper-view-grid-color: var(--gray-more);
   --primary-border: solid 2px var(--proper-view-grid-color);
