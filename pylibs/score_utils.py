@@ -1,8 +1,6 @@
-# Copyright: see README and LICENSE under the project root directory.
-# Author: @Leedehai
-#
-# File: score_utils.py
-# ---------------------------
+# Copyright (c) 2020 Leedehai. All rights reserved.
+# Use of this source code is governed under the MIT LICENSE.txt file.
+# -----
 # Utilities.
 
 import os
@@ -13,6 +11,26 @@ from pathlib import Path
 from typing import List, Optional
 
 IS_ATTY = sys.stdin.isatty() and sys.stdout.isatty()
+
+# The mapping roughly follows GN's src/gn/args.cc
+try:
+    # OS name (or 'java' for Jython environment)
+    SYS_NAME = ({
+        "linux": "linux",
+        "darwin": "mac",
+        "windows": "win",
+    })[platform.system().lower()]  # 'linux', 'darwin', 'windows', 'java'
+    # CPU architecture (64-bit only), same as 'uname -m'
+    ARCH_NAME = ({
+        "x86_64": "x64",
+        "riscv64": "riscv64",
+        # Though AArch64 is the canonical name of 64-bit ARM, GN uses Arm64
+        # (an deprecated name initially introduced by Apple).
+        "arm64": "arm64",
+        "aarch64": "arm64",
+    })[platform.machine()]
+except:
+    raise NotImplementedError("Unsupported system/architecture.")
 
 
 def err_exit(message: str):
@@ -28,7 +46,7 @@ def error_s(s: str) -> str:
     return ("\x1b[1merror:\x1b[0m" if IS_ATTY else "error:") + (" %s\n" % s)
 
 
-INFINITE_TIME = 0  # it means effectively infinite time required by timer
+INFINITE_TIME = 0  # It means effectively infinite time required by timer
 
 
 def get_timeout(timeout: int) -> str:
@@ -98,11 +116,11 @@ def guess_emulator_supports_hyperlink() -> bool:
     if (("SSH_CLIENT" in os.environ) or ("SSH_CONNECTION" in os.environ)
             or ("SSH_TTY" in os.environ)):
         return False
-    if platform.system().lower() == "linux":
-        return True  # VTE terminals (GNOME, Guake, Tilix, ...) are fine
-    elif platform.system().lower() == "darwin":  # macOS
+    if SYS_NAME == "linux":
+        return True  # VTE terminals (GNOME, Guake, Tilix, ...) are fine.
+    if SYS_NAME == "mac":  # macOS
         if os.environ.get("TERM_PROGRAM", "").lower().startswith("apple"):
-            return False  # Apple's default Terminal.app is lame, recommend iTerm2.app
+            return False  # Apple's default Terminal.app is lame, recommend iTerm2.app.
         return True
     return False
 
@@ -126,7 +144,7 @@ BEGINNING_KEPT = 12
 
 
 def ellipse_str(limit, s):
-    assert (limit >= BEGINNING_KEPT + len(ELLIPSE))
+    assert limit >= BEGINNING_KEPT + len(ELLIPSE)
     if len(s) <= limit:
         return s
     return "%s%s%s" % (s[:BEGINNING_KEPT], ELLIPSE,

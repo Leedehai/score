@@ -89,8 +89,8 @@ if [ ! -f logs2/log.json ] ; then
     printf "\033[31;1mmissing: logs1/log.json\n\033[0m"
     has_error=1
 fi
-if [ $(ls logs3 | wc -l) -ne 1 ] ; then
-    printf "\033[31;1mlogs3 file count incorrect (expect 1):\n\033[0m"
+if [ $(ls logs3 | wc -l) -ne 2 ] ; then
+    printf "\033[31;1mlogs3 file count incorrect (expect 2):\n\033[0m"
     ls logs3
     has_error=1
 fi

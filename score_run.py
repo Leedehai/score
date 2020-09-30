@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-# Copyright: see README and LICENSE under the project root directory.
-# Author: @Leedehai
-#
-# File: score_run.py
-# ---------------------------
+# Copyright (c) 2020 Leedehai. All rights reserved.
+# Use of this source code is governed under the MIT LICENSE.txt file.
+# -----
 # For more information, see README.md.
 # For help: use '--help' and '--docs'.
 
@@ -47,11 +45,10 @@ from pylibs.runner_print import (
     print_one_task_realtime_log,
     print_summary_report,
 )
-from pylibs.score_utils import err_exit, info_s, error_s
+from pylibs.score_utils import SYS_NAME, err_exit, info_s, error_s
 from pylibs import schema
 
 
-# Set signal handlers
 def sighandler(sig, frame):  # pylint: disable=unused-argument
     sys.exit(2)  # Do not print: it's ugly if all workers print simultaneously.
 
@@ -63,8 +60,7 @@ signal.signal(signal.SIGSEGV, sighandler)  # type: ignore
 
 
 def get_metadata_from_path(test_id: str, path: str) -> Dict[str, Any]:
-    # docs: see EXPLANATION_STRING below
-    return {
+    return {  # Docs: see pylibs.docs.EXPLANATION_STRING.
         "id": test_id, "path": path, "args": [], "envs": None, "prefix": [],
         "golden": None, "timeout_ms": None,
         "exit": {"type": "return", "repr": 0}
@@ -72,10 +68,10 @@ def get_metadata_from_path(test_id: str, path: str) -> Dict[str, Any]:
 
 
 # Run mp.Pool.map()
-# NOTE the try-except block is to handle KeyboardInterrupt cleanly to fix a flaw
+# NOTE The try-except block is to handle KeyboardInterrupt cleanly to fix a flaw
 # in Python: KeyboardInterrupt cannot cleanly kill mp.Pool()'s child processes,
 # printing verbosely: https://stackoverflow.com/a/6191991/8385554
-# NOTE each 'func' has to ignore SIGINT for the aforementioned fix to work
+# NOTE Each 'func' has to ignore SIGINT for the aforementioned fix to work.
 def pool_map(
     num_workers: int,
     func: Callable[[TaskWorkerArgs], TaskResult],
@@ -121,33 +117,28 @@ def compute_hashed_id(prog: Path, id_name: str) -> str:
     return "%s-%s" % (prog.name, id_name_hashed.lower())
 
 
-# This path stem (meaning there is no extension such as ".diff") is made of the
-# hashed_id, repeat count, log_dirname. E.g.
-# hashed_id = "hello-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
-#   => return: "./out/foo/logs/he/hello-0ade7c2c-3"
+# This path stem (meaning there is no extension such as ".diff"), e.g.
+# hashed_id = "hello-0ade7", repeat 3 out of 10, log_dirname = "./out/foo/logs"
+#   => return: "./out/foo/logs/he/hello-0ade7-3"
 def get_logfile_path_stem(
     hashed_id: str,
     repeat_count: int,
     log_dirname: str,
 ) -> str:
-    return "%s-%s" % (Path(log_dirname, hashed_id[:2], hashed_id), repeat_count)
+    return "%s-%s" % (Path(log_dirname, "_" + hashed_id[:2],
+                           hashed_id), repeat_count)
 
 
 def create_dir_if_needed(dirname: str) -> None:
-    # NOTE use EAFP (Easier to Ask for Forgiveness than Permission) principle here, i.e.
-    # use try-catch to handle the situation where the directory was already created by
-    # another process.
-    # EAFP can avoid the race condition caused by LBYL (Look Before You Leap): use a
-    # if-statement to check the absence of the target directory before creating it.
-    # Using lock can also avoid the race condition, but it is cumbersome in Python.
-    # Unlike other languages, try-catch doesn't add a noticeable overhead in Python.
+    # It appears try-catch can avoid race conditions when multiple threads want
+    # to create the same directory: https://stackoverflow.com/a/12468091/8385554
     try:
-        os.makedirs(dirname)  # create intermediate dirs if necessary
-    except OSError:  # Python2 throws OSError, Python3 throws its subclass FileExistsError
-        pass  # dir already exists (due to multiprocessing)
+        os.makedirs(dirname)  # Create intermediate dirs if necessary.
+    except OSError:
+        pass
 
 
-# can be used concurrently
+# Can be used concurrently.
 def write_file(filename: str,
                s: str,
                assert_str_non_empty: bool = False) -> None:
@@ -160,7 +151,7 @@ def write_file(filename: str,
 
 
 def process_inspectee_stdout(s: str) -> str:
-    return re.sub(r"\x1b\[.*?m", "", s)  # remove color sequences
+    return re.sub(r"\x1b\[.*?m", "", s)  # Remove color sequences.
 
 
 def did_run_one_task(
@@ -183,13 +174,15 @@ def did_run_one_task(
     stdout_filename = None
     if not write_golden:
         stdout_filename = os.path.abspath(filepath_stem + ".stdout")
-    diff_filename = None  # will be given a str if there is need to compare and diff is found
+    # diff_filename will be set with a str later if there is need to compare
+    # and diff is found.
+    diff_filename = None
     if stdout_filename:
         assert not write_golden
         write_file(stdout_filename, inspectee_stdout)  # stdout could be ""
-    if metadata["golden"] != None:  # write golden or compare stdout with golden
+    if metadata["golden"] != None:  # Write golden or compare stdout with it.
         golden_filename = metadata["golden"]
-        if write_golden:  # write stdout to golden
+        if write_golden:  # Write stdout to golden.
             if not match_exit:
                 exceptions.append(TaskExceptions.GOLDEN_NOT_WRITTEN_WRONG_EXIT)
             else:
@@ -202,8 +195,8 @@ def did_run_one_task(
                                 TaskExceptions.GOLDEN_NOT_WRITTEN_SAME_CONTENT)
                 if not golden_exists_and_same:
                     write_file(golden_filename,
-                               inspectee_stdout)  # stdout could be ""
-        else:  # compare stdout with golden
+                               inspectee_stdout)  # The stdout could be "".
+        else:  # Compare stdout with golden.
             assert stdout_filename
             found_golden, stdout_comparison_diff = get_diff_html_str(
                 html_title=filepath_stem.split(os.sep)[-1],
@@ -213,7 +206,7 @@ def did_run_one_task(
             )
             if not found_golden:
                 exceptions.append(TaskExceptions.GOLDEN_FILE_MISSING)
-            if stdout_comparison_diff != None:  # write only if diff is not empty
+            if stdout_comparison_diff != None:  # Write if diff is non-empty.
                 diff_filename = os.path.abspath(filepath_stem + ".diff.html")
                 write_file(diff_filename,
                            stdout_comparison_diff,
@@ -226,8 +219,8 @@ def did_run_one_task(
 # Used by run_all()
 def remove_prev_log(log_dir: str) -> None:
     if os.path.isdir(log_dir):
-        # to prevent perplexing cases e.g. master log says all is good, but *.diff files
-        # from a previous run exist
+        # To prevent perplexing cases e.g. master log says all is good, but
+        # *.diff files from a previous run exist.
         shutil.rmtree(log_dir)
     elif os.path.exists(log_dir):
         err_exit(error_s("path exists as a non-directory: %s" % log_dir))
@@ -281,6 +274,12 @@ def run_one_task(input_args: TaskWorkerArgs) -> TaskResult:
         TaskEnvKeys.CTIMER_TIMEOUT_ENVKEY.value: score_utils.get_timeout(
             metadata["timeout_ms"]),
     }
+    if SYS_NAME == "mac":
+        # Required by timer. Linux reports max resident set size in KB, but
+        # macOS reports it in B, but we need the result in KB universally,
+        # and this environment variable is used to tell the timer it should
+        # convert the number: https://github.com/leedehai/ctimer/README.md.
+        env_values.update({"RUSAGE_SIZE_BYTES": "1"})
     if metadata["envs"] != None:
         env_values.update(metadata["envs"])
     one_task_result = run_one_task_impl(
@@ -311,6 +310,7 @@ def run_all(
         [(args.timer, args.log, args.write_golden, metadata)
          for metadata in metadata_list])
     create_dir_if_needed(args.log)
+    create_dir_if_needed(str(Path(args.log, "tmp")))  # Tests may write stuff.
     master_log_filepath = Path(args.log, LOG_FILE_BASE)
     with open(master_log_filepath, 'w') as f:
         json.dump(result_list, f, indent=2, separators=(",", ": "))  # Sorted.
@@ -384,7 +384,6 @@ def process_metadata_list(
                 info_s("%d tests are ignored because they specified "
                        "no golden file to write" %
                        len(ignore_metadata_indexes)))
-
     # Process the raw metadata list:
     # 1. take care of args.repeat; 2. take care of args.read_flakes
     metadata_list_processed = []
