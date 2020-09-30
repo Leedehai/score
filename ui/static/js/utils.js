@@ -375,3 +375,18 @@ utils.makeCopyButton = (text, elementType, elementId) => {
   });
   return copyButtonHolder;
 };
+
+/**
+ * @param {string=} relpath Path relative to the parent directory of
+ *     the current HTML page.
+ * @return {string=}
+ */
+utils.makeAbsPath = (relpath) => {
+  if (!relpath) {
+    return relpath;  // null, undefined.
+  }
+  const rootPath = window.location.origin +
+      window.location.pathname.split('/').slice(0, -1).join('/');
+  // Use URL() so that we have "a/./b" => "a/b", "a/b/../c" => "a/c", etc.
+  return (new URL(rootPath + '/' + relpath)).toString();
+};

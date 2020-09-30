@@ -240,11 +240,11 @@ class DetailsPanel extends HTMLElement {
         },
         {
           content: taskInfo.stdout[1] ? 'stdout' : '-',
-          iframe: taskInfo.stdout[1],
+          iframe: utils.makeAbsPath(taskInfo.stdout[1]),
         },
         {
           content: taskInfo.stdout[2] ? 'diff' : '-',
-          iframe: taskInfo.stdout[2],
+          iframe: utils.makeAbsPath(taskInfo.stdout[2]),
         },
         {
           content: taskInfo.stdout[0] ? 'yes' : 'no',

@@ -234,6 +234,24 @@ def _count_errors(
     return test_error_count, task_error_count
 
 
+def _use_relpaths_in_stdout_tuple(stdout_tuple: tuple,
+                                  generate_to_dir: Path) -> tuple:
+    """
+    Convert absolute paths to relative paths (relative to the HTML file's
+    parent directory), so that the html directory can be sent to another
+    machine without broken URLs in the index.html file.
+    """
+    res = [stdout_tuple[0], None, None]
+    res.append(stdout_tuple[0])  # The boolean status.
+    if stdout_tuple[1]:
+        res[1] = os.path.relpath(stdout_tuple[1],
+                                 generate_to_dir)  # Path, the stdout.
+    if stdout_tuple[2]:
+        res[2] = os.path.relpath(stdout_tuple[2],
+                                 generate_to_dir)  # Path, the diff.
+    return tuple(res)
+
+
 def _generate_web_view_impl(
     *,
     sorted_task_results: List[dict],
@@ -294,7 +312,8 @@ def _generate_web_view_impl(
                     "exit": (TaskResGetter.exit(e)["ok"],
                              TaskResGetter.exit(e)["real"]["type"],
                              TaskResGetter.exit(e)["real"]["repr"]),  # tuple
-                    "stdout": TaskResGetter.real_stdout(e),  # tuple
+                    "stdout": _use_relpaths_in_stdout_tuple(
+                        TaskResGetter.real_stdout(e), generate_to_dir),  # tuple
                 },
                 stringify=True) for e in sorted_task_results
         ],
