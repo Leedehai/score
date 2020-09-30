@@ -110,28 +110,27 @@ def split_ctimer_out(s: str) -> Tuple[str, str]:
     return inspectee_stdout.rstrip(), ctimer_stdout.rstrip()
 
 
-def compute_hashed_id(prog: str, id_name: str) -> str:
+def compute_hashed_id(prog: Path, id_name: str) -> str:
     """
-    id_name, though already unique among tests, may contain characters like
-    ":", "/". This function returns a hashed version of id_name.
+    id_name, though already unique among tests, may contain characters
+    like ":", "/". This function returns a hashed version of id_name.
     """
     # In fact, id_name alone can uniquely identify a test, but prefixing it with
-    # path_repr makes the returned string human-friendly.
-    path_repr = str(Path(*Path(prog).parts[-2:]))
+    # prog.name makes the returned string human-friendly.
     id_name_hashed = hashlib.sha1(id_name.encode()).hexdigest()
-    return "%s-%s" % (path_repr, id_name_hashed.lower())
+    return "%s-%s" % (prog.name, id_name_hashed.lower())
 
 
 # This path stem (meaning there is no extension such as ".diff") is made of the
 # hashed_id, repeat count, log_dirname. E.g.
-# hashed_id = "bar/foo-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
-#   => return: "./out/foo/logs/bar/foo-0ade7c2c-3"
+# hashed_id = "hello-0ade7c2c", repeat 3 out of 1~10, log_dirname = "./out/foo/logs"
+#   => return: "./out/foo/logs/he/hello-0ade7c2c-3"
 def get_logfile_path_stem(
     hashed_id: str,
     repeat_count: int,
     log_dirname: str,
 ) -> str:
-    return "%s-%s" % (os.path.join(log_dirname, hashed_id), repeat_count)
+    return "%s-%s" % (Path(log_dirname, hashed_id[:2], hashed_id), repeat_count)
 
 
 def create_dir_if_needed(dirname: str) -> None:
@@ -396,8 +395,8 @@ def process_metadata_list(
     for i, metadata in enumerate(metadata_list):
         if i in ignore_metadata_indexes:
             continue
-        metadata["hashed_id"] = compute_hashed_id(
-            prog=metadata["path"], id_name=metadata["id"])  # str  # str
+        metadata["hashed_id"] = compute_hashed_id(prog=Path(metadata["path"]),
+                                                  id_name=metadata["id"])  # str
         metadata["flaky_errors"] = flaky_tests_decl.get(metadata["id"], [])
         for repeat_cnt in range(args.repeat):
             metadata_copy = copy.deepcopy(metadata)
