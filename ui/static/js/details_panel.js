@@ -91,6 +91,9 @@ class DetailsPanel extends HTMLElement {
   renderCommandInvocation_() {
     const section = document.createElement('div');
     section.classList.add('test_details_command');
+    // We need to escape '*', which will be interpreted as glob pattern by
+    // the terminal emulator otherwise.
+    const commandToType = this.testInfo.command.replace(/\*/g, '\\*');
 
     const expandButton = document.createElement('a');
     expandButton.id = 'expansion_button';
@@ -98,11 +101,11 @@ class DetailsPanel extends HTMLElement {
     expandButton.textContent = 'command invocation';
     section.append(expandButton);
     const copyButton =
-        utils.makeCopyButton(this.testInfo.command, 'div', 'copy_command');
+        utils.makeCopyButton(commandToType, 'div', 'copy_command');
     section.append(copyButton);
     const commandArea = document.createElement('pre');
     commandArea.id = 'command_text_area';
-    commandArea.textContent = this.testInfo.command;
+    commandArea.textContent = commandToType;
     section.append(commandArea);
 
     expandButton.addEventListener('click', () => {

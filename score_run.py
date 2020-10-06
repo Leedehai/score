@@ -267,19 +267,34 @@ def run_one_task_impl(timer: str, log_dirname: str, write_golden: bool,
     return one_task_result
 
 
-def run_one_task(input_args: TaskWorkerArgs) -> TaskResult:
-    timer, log_dirname, write_golden, metadata = input_args
-    env_values = {
-        TaskEnvKeys.CTIMER_DELIMITER_ENVKEY.value: DELIMITER_STR,
-        TaskEnvKeys.CTIMER_TIMEOUT_ENVKEY.value: score_utils.get_timeout(
-            metadata["timeout_ms"]),
-    }
+def get_platform_dependent_envs():
+    res = {}
+    library_path_envkey = None
     if SYS_NAME == "mac":
+        library_path_envkey = "DYLD_LIBRARY_PATH"
         # Required by timer. Linux reports max resident set size in KB, but
         # macOS reports it in B, but we need the result in KB universally,
         # and this environment variable is used to tell the timer it should
         # convert the number: https://github.com/leedehai/ctimer/README.md.
-        env_values.update({"RUSAGE_SIZE_BYTES": "1"})
+        res.update({"RUSAGE_SIZE_BYTES": "1"})
+    elif SYS_NAME == "linux":
+        library_path_envkey = "LD_LIBRARY_PATH"
+    if library_path_envkey != None and library_path_envkey in os.environ:
+        res.update({library_path_envkey: os.environ[library_path_envkey]})
+    return res
+
+
+PLATFORM_DEPENDENT_ENVS = get_platform_dependent_envs()
+
+
+def run_one_task(input_args: TaskWorkerArgs) -> TaskResult:
+    timer, log_dirname, write_golden, metadata = input_args
+    env_values = PLATFORM_DEPENDENT_ENVS
+    env_values.update({
+        TaskEnvKeys.CTIMER_DELIMITER_ENVKEY.value: DELIMITER_STR,
+        TaskEnvKeys.CTIMER_TIMEOUT_ENVKEY.value: score_utils.get_timeout(
+            metadata["timeout_ms"]),
+    })
     if metadata["envs"] != None:
         env_values.update(metadata["envs"])
     one_task_result = run_one_task_impl(
