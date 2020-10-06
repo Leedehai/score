@@ -212,6 +212,7 @@ class DetailsPanel extends HTMLElement {
     this.testInfo.taskIndexes.forEach((pos, index) => {
       const taskInfo = /** @type {!TaskInfo} */
           (JSON.parse(dataStorage.taskResults[pos].replace(/'/g, '"')));
+      const exitStatus = taskInfo.exit.slice(1, 3).join(' ');
       const times = taskInfo.timesMs;
       const procWallTimeRatio =
           (times[0] / (times[2] - times[1]) * 100).toFixed(0);
@@ -232,7 +233,8 @@ class DetailsPanel extends HTMLElement {
           tooltip: `${taskInfo.maxrssKb} KB`,
         },
         {
-          content: taskInfo.exit.slice(1, 3).join(' '),
+          content: exitStatus,
+          tooltip: this.generatePosixHintOnExitStatus_(exitStatus),
         },
         {
           content: taskInfo.exit[0] ? 'yes' : 'no',
@@ -278,6 +280,56 @@ class DetailsPanel extends HTMLElement {
                            (errorIsFlaky ? 'flaky' : 'error_outline'));
     statusIconHolder.append(statusIcon);
     return statusIconHolder;
+  }
+
+  // SIGHUP	1	Hang up detected on controlling terminal or death of
+  // controlling process SIGINT	2	Issued if the user sends an interrupt
+  // signal (Ctrl + C)
+  // SIGQUIT	3	Issued if the user sends a quit signal (Ctrl + D)
+  // SIGFPE	8	Issued if an illegal mathematical operation is attempted
+  // SIGKILL	9	If a process gets this signal it must quit immediately
+  // and will not perform any clean-up operations SIGALRM	14	Alarm
+  // clock signal (used for timers)
+  // SIGTERM	15	Software termination signal (sent by kill by default)
+
+  /**
+   * @param {string} exitStatus
+   * @return {string|undefined}
+   */
+  generatePosixHintOnExitStatus_(exitStatus) {
+    switch (exitStatus) {
+      case 'return 126':
+        return 'Permission error.';
+      case 'return 127':
+        return 'Program or shared libraries not found.';
+      // Signals: https://man7.org/linux/man-pages/man7/signal.7.html
+      case 'signal 2':
+        return 'SIGINT: interrupted.';
+      case 'signal 3':
+        return 'SIGQUIT: quit.';
+      case 'signal 4':
+        return 'SIGILL: illegal instruction.';
+      case 'signal 5':
+        return 'SIGTRAP: trace/breakpoint trap.';
+      case 'signal 6':
+        return 'SIGABRT: abort.';
+      case 'signal 8':
+        return 'SIGFPE: bad mathematical operation.';
+      case 'signal 9':
+        return 'SIGKILL: killed (without resource cleanup).';
+      case 'signal 11':
+        return 'SIGSEGV: segmentation fault.';
+      case 'signal 13':
+        return 'SIGPIPE: broken pipe.';
+      case 'signal 14':
+        return 'SIGALRM: timer alarm.';
+      case 'signal 15':
+        return 'SIGTERM: terminated (with resource cleanup).';
+      case 'signal 31':
+        return 'SIGSYS: bad system call.';
+      default:
+        return undefined;
+    }
   }
 
   /**
