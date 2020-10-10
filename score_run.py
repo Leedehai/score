@@ -119,14 +119,15 @@ def compute_hashed_id(prog: Path, id_name: str) -> str:
 
 # This path stem (meaning there is no extension such as ".diff"), e.g.
 # hashed_id = "hello-0ade7", repeat 3 out of 10, log_dirname = "./out/foo/logs"
-#   => return: "./out/foo/logs/he/hello-0ade7-3"
+#   => return: "./out/foo/logs/_he-0a/hello-0ade7-3"
 def get_logfile_path_stem(
     hashed_id: str,
     repeat_count: int,
     log_dirname: str,
 ) -> str:
-    return "%s-%s" % (Path(log_dirname, "_" + hashed_id[:2],
-                           hashed_id), repeat_count)
+    hashed_e1, hashed_e2 = hashed_id.split('-', 1)
+    log_subname = "_" + hashed_e1[:2] + hashed_e2[:2]
+    return "%s-%s" % (Path(log_dirname, log_subname, hashed_id), repeat_count)
 
 
 def create_dir_if_needed(dirname: str) -> None:
