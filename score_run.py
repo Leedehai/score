@@ -228,8 +228,8 @@ def remove_prev_log(log_dir: str) -> None:
 
 
 # Used by run_one()
-def run_one_task_impl(timer: str, log_dirname: str, write_golden: bool,
-                      env_values: Dict[str, str],
+def run_one_task_impl(timer: str, also_stderr: bool, log_dirname: str,
+                      write_golden: bool, env_values: Dict[str, str],
                       metadata: TaskMetadata) -> TaskResult:
     # The return code of the timer program is guaranteed to be 0
     # unless the timer itself has errors.
@@ -244,10 +244,11 @@ def run_one_task_impl(timer: str, log_dirname: str, write_golden: bool,
         # [1] I wrote a Python program to verify this. I set the timeout
         #     to be 10 msec and give it a infinite-loop program, when it
         #     times out the reported time usage is 14 msec, way over 10.
-        o = subprocess.check_output([timer] + metadata["prefix"] +
-                                    [metadata["path"]] + metadata["args"],
-                                    stderr=subprocess.DEVNULL,
-                                    env=env_values)
+        o = subprocess.check_output(
+            [timer] + metadata["prefix"] + [metadata["path"]] +
+            metadata["args"],
+            stderr=subprocess.STDOUT if also_stderr else subprocess.DEVNULL,
+            env=env_values)
         stdout = o.decode(errors="backslashreplace").rstrip()
         end_abs_time = time.time()
     except subprocess.CalledProcessError as e:
@@ -289,7 +290,7 @@ PLATFORM_DEPENDENT_ENVS = get_platform_dependent_envs()
 
 
 def run_one_task(input_args: TaskWorkerArgs) -> TaskResult:
-    timer, log_dirname, write_golden, metadata = input_args
+    timer, also_stderr, log_dirname, write_golden, metadata = input_args
     env_values = PLATFORM_DEPENDENT_ENVS
     env_values.update({
         TaskEnvKeys.CTIMER_DELIMITER_ENVKEY.value: DELIMITER_STR,
@@ -300,6 +301,7 @@ def run_one_task(input_args: TaskWorkerArgs) -> TaskResult:
         env_values.update(metadata["envs"])
     one_task_result = run_one_task_impl(
         timer,
+        also_stderr,
         log_dirname,
         write_golden,
         env_values,
@@ -323,7 +325,7 @@ def run_all(
     run_tests_start_time = time.time()
     result_list: List[TaskResult] = pool_map(
         num_workers, run_one_task,
-        [(args.timer, args.log, args.write_golden, metadata)
+        [(args.timer, args.also_stderr, args.log, args.write_golden, metadata)
          for metadata in metadata_list])
     create_dir_if_needed(args.log)
     create_dir_if_needed(str(Path(args.log, "tmp")))  # Tests may write stuff.
@@ -486,6 +488,9 @@ def main():
                         "--sequential",
                         action="store_true",
                         help="run sequentially instead concurrently")
+    parser.add_argument("--also-stderr",
+                        action="store_true",
+                        help="redirect stderr to stdout")
     parser.add_argument(
         "--read-flakes",
         metavar="DIR",

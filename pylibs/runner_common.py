@@ -15,7 +15,7 @@ from pylibs.score_utils import error_s
 Args = argparse.Namespace
 TaskMetadata = Dict[str, Any]
 TaskResult = OrderedDict[str, Any]
-TaskWorkerArgs = Tuple[str, str, bool, TaskMetadata]
+TaskWorkerArgs = Tuple[str, bool, str, bool, TaskMetadata]
 
 # Constants.
 
